@@ -1676,14 +1676,14 @@ function renderStock(){
       const name=it.รายการ||'';const qty=parseFloat(it.จำนวน)||0;if(!name||!qty)return;
       const size=it.ขนาด||'';const model=it.รุ่น||'';
       const t=doc.ประเภท,mf=doc.โยกจาก||'',mt=doc.โยกไป||'';
-      const mk=(p,n,s,m)=>{const k=n+'|'+s+'|'+m+'|'+p;if(!map[k])map[k]={name:n,size:s,model:m,proj:p,unit:it.หน่วย||'',in:0,out:0,mvin:0,mvout:0};return k;};
+      const mk=(p,n,s,m)=>{const k=n+'|'+s+'|'+m+'|'+p;if(!map[k])map[k]={name:n,size:s,model:m,proj:p,unit:it.หน่วย||'',in:0,out:0,loss:0,mvin:0,mvout:0};return k;};
       if(t==='in')map[mk(proj,name,size,model)].in+=qty;
       else if(t==='out')map[mk(proj,name,size,model)].out+=qty;
-      else if(t==='loss'){map[mk(proj,name,size,model)].loss=(map[mk(proj,name,size,model)].loss||0)+qty;}
+      else if(t==='loss')map[mk(proj,name,size,model)].loss+=qty;
       else if(t==='mv'){if(mf)map[mk(mf,name,size,model)].mvout+=qty;if(mt)map[mk(mt,name,size,model)].mvin+=qty;}
     });
   });
-  const rows=Object.values(map).map(r=>({...r,loss:r.loss||0,net:r.out-r.in-r.mvin+r.mvout}))
+  const rows=Object.values(map).map(r=>({...r,net:r.out-r.in-r.mvin+r.mvout-r.loss}))
     .sort((a,b)=>a.proj.localeCompare(b.proj,'th')||a.name.localeCompare(b.name,'th')||a.size.localeCompare(b.size)||a.model.localeCompare(b.model));
   const projs=[...new Set(rows.map(r=>r.proj))].sort();
   const pf=document.getElementById('stock-proj-filter');
@@ -1751,14 +1751,14 @@ function printStock(){
       const name=it.รายการ||'';const qty=parseFloat(it.จำนวน)||0;if(!name||!qty)return;
       const t=doc.ประเภท,mf=doc.โยกจาก||'',mt=doc.โยกไป||'';
       const size=it.ขนาด||'';const model=it.รุ่น||'';
-      const mk=(p,n,s,m)=>{const k=n+'|'+s+'|'+m+'|'+p;if(!map[k])map[k]={name:n,size:s,model:m,proj:p,unit:it.หน่วย||'',in:0,out:0,mvin:0,mvout:0};return k;};
+      const mk=(p,n,s,m)=>{const k=n+'|'+s+'|'+m+'|'+p;if(!map[k])map[k]={name:n,size:s,model:m,proj:p,unit:it.หน่วย||'',in:0,out:0,loss:0,mvin:0,mvout:0};return k;};
       if(t==='in')map[mk(proj,name,size,model)].in+=qty;
       else if(t==='out')map[mk(proj,name,size,model)].out+=qty;
-      else if(t==='loss'){map[mk(proj,name,size,model)].loss=(map[mk(proj,name,size,model)].loss||0)+qty;}
+      else if(t==='loss')map[mk(proj,name,size,model)].loss+=qty;
       else if(t==='mv'){if(mf)map[mk(mf,name,size,model)].mvout+=qty;if(mt)map[mk(mt,name,size,model)].mvin+=qty;}
     });
   });
-  const rows=Object.values(map).map(r=>({...r,loss:r.loss||0,net:r.out-r.in-r.mvin+r.mvout}))
+  const rows=Object.values(map).map(r=>({...r,net:r.out-r.in-r.mvin+r.mvout-r.loss}))
     .sort((a,b)=>a.proj.localeCompare(b.proj,'th')||a.name.localeCompare(b.name,'th')||(a.size||'').localeCompare(b.size||'')||(a.model||'').localeCompare(b.model||''));
 
   // กรองตาม proj filter ปัจจุบัน
@@ -2087,15 +2087,25 @@ function gasPost(action, body){
 function loadFromSheet(){
   return gasGet('getDocs').then(data=>{
     if(!data||!data.ok||!data.docs) return;
-    const lm={};docs.forEach(d=>{lm[String(d.id)]=d;});
-    // Sheet = source of truth, แต่ preserve ค่า local สำหรับ ประเภท/สถานะ
+    // อ่านจาก localStorage โดยตรง ป้องกัน in-memory docs ถูกทับไปแล้วก่อน
+    const localDocs=JSON.parse(localStorage.getItem('lbk_docs')||'[]');
+    const lm={};localDocs.forEach(d=>{lm[String(d.id)]=d;});
+    const SPECIAL_TYPES=['loss','mv'];
+    const SPECIAL_STATUS=['สูญเสีย','โยก','รับเข้าสโตร์'];
     const sheetDocs=data.docs.map(sd=>{
       const local=lm[String(sd.id)];
+      // หลักการ merge ประเภท/สถานะ:
+      // - ถ้า Sheet ส่งค่าพิเศษมา (loss/mv/สูญเสีย ฯลฯ) → ใช้ Sheet (Sheet sync ถูกต้องแล้ว)
+      // - ถ้า Sheet ส่งแค่ default (out/ออก) แต่ local มีค่าพิเศษ → ใช้ local (Sheet ยังไม่ sync)
+      // → ทำให้ Sheet อัปเดตได้จริง และไม่ทับค่าพิเศษที่ local บันทึกไว้
+      const sheetHasSpecial=SPECIAL_TYPES.includes(sd.ประเภท)||SPECIAL_STATUS.includes(sd.สถานะ);
+      const localHasSpecial=local&&(SPECIAL_TYPES.includes(local.ประเภท)||SPECIAL_STATUS.includes(local.สถานะ));
+      const finalType=sheetHasSpecial?sd.ประเภท:(localHasSpecial?local.ประเภท:(sd.ประเภท||local?.ประเภท||'out'));
+      const finalStatus=sheetHasSpecial?sd.สถานะ:(localHasSpecial?local.สถานะ:(sd.สถานะ||local?.สถานะ||'ออก'));
       return {
         ...sd,
-        // ถ้า local มีประเภทที่ละเอียดกว่า (loss/buy/mv) ให้ใช้ local
-        ประเภท: local?.ประเภท||sd.ประเภท||'out',
-        สถานะ: local?.สถานะ||sd.สถานะ||'ออก',
+        ประเภท: finalType,
+        สถานะ:  finalStatus,
         แหล่งข้อมูล: local?.แหล่งข้อมูล||sd.แหล่งข้อมูล||'',
         รูปถ่าย: local?.รูปถ่าย||[],
         รายการสินค้า: typeof sd.รายการสินค้า==='string'
@@ -2271,6 +2281,13 @@ function saveEditDoc(){
   docs[idx].ผู้นำของ    = document.getElementById('edit-carrier').value.trim();
   docs[idx].หมายเหตุ    = document.getElementById('edit-note').value.trim();
   docs[idx].สถานะ       = document.getElementById('edit-status')?.value || docs[idx].สถานะ;
+  // อัปเดต ประเภท ให้ตรงกับสถานะ เพื่อให้หัวกระดาษและการคำนวณสต็อกถูกต้อง
+  const newStatus = docs[idx].สถานะ;
+  if(newStatus==='ออก') docs[idx].ประเภท='out';
+  else if(newStatus==='สูญเสีย') docs[idx].ประเภท='loss';
+  else if(newStatus==='โยก') docs[idx].ประเภท='mv';
+  else if(newStatus==='รับเข้าสโตร์'){ docs[idx].ประเภท='in'; docs[idx].แหล่งข้อมูล='สโตร์'; }
+  else if(newStatus==='คืน') { docs[idx].ประเภท='in'; docs[idx].แหล่งข้อมูล=''; }
   docs[idx].รายการสินค้า = editItems.map(({eid:_,...r})=>r);
   docs[idx].รูปถ่าย      = [...editPhotos];
   localStorage.setItem('lbk_docs', JSON.stringify(docs));
@@ -2635,6 +2652,7 @@ table{width:100%;border-collapse:collapse}
           <option value="คืน">นำของเข้า</option>
           <option value="รับเข้าสโตร์">รับเข้าสโตร์</option>
           <option value="โยก">โยกย้าย</option>
+          <option value="สูญเสีย">⚠️ สูญเสีย</option>
         </select>
       </div>
       <div style="font-size:11px;font-weight:600;color:var(--t2);text-transform:uppercase;letter-spacing:.07em;padding:4px 0 8px">รายการอุปกรณ์</div>
