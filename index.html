@@ -2335,15 +2335,15 @@ function buildPhotoPage(doc) {
     .concat(links.map(function(l){ return {src:l.thumbUrl, link:l.viewUrl}; }));
   if(!allImgs.length) return '';
   var imgs = allImgs.map(function(img, i){
-    return '<div style="text-align:center;display:inline-block;margin:5px">' +
-      '<img src="' + img.src + '" style="width:180px;height:180px;object-fit:cover;border:1px solid #ccc;border-radius:4px;display:block">' +
-      '<div style="font-size:9pt;color:#555;margin-top:3px">รูปที่ ' + (i+1) + '</div>' +
+    return '<div style="text-align:center;width:calc(50% - 12px);display:inline-block;margin:6px;vertical-align:top">' +
+      '<img src="' + img.src + '" style="width:100%;max-width:360px;height:320px;object-fit:cover;border:1px solid #ccc;border-radius:6px;display:block;margin:0 auto">' +
+      '<div style="font-size:10pt;color:#555;margin-top:5px">รูปที่ ' + (i+1) + '</div>' +
       '</div>';
   }).join('');
   return '<div style="page-break-before:always;padding:8mm 10mm;font-family:Sarabun,sans-serif">' +
     '<div style="font-size:14pt;font-weight:700;border-bottom:2px solid #000;padding-bottom:6px;margin-bottom:12px">' +
     'รูปถ่ายประกอบ — ' + (doc.เลขเอกสาร||'') + '</div>' +
-    '<div style="display:flex;flex-wrap:wrap;gap:10px">' + imgs + '</div>' +
+    '<div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-start">' + imgs + '</div>' +
     '</div>';
 }
 
