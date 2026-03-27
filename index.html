@@ -1355,11 +1355,9 @@ function renderHistory(){
     return;
   }
   listEl.innerHTML=filtered.map(doc=>{
-    const isLoss=doc.ประเภท==='loss'||doc.สถานะ==='สูญเสีย';
-    const isMv=doc.ประเภท==='mv'||doc.สถานะ==='โยก';
-    const isBuyReceipt=(doc.ประเภท==='in'&&doc.สถานะ==='รับเข้าสโตร์')||doc.สถานะ==='รับเข้าสโตร์';
-    const isOut=!isLoss&&!isMv&&!isBuyReceipt&&(doc.ประเภท==='out'||doc.สถานะ==='ออก');
-    const isReturnIn=!isOut&&!isLoss&&!isMv&&!isBuyReceipt;
+    const isOut=doc.ประเภท==='out',isLoss=doc.ประเภท==='loss',isMv=doc.ประเภท==='mv';
+    const isBuyReceipt=doc.ประเภท==='in'&&doc.สถานะ==='รับเข้าสโตร์';
+    const isReturnIn=doc.ประเภท==='in'&&!isBuyReceipt;
     const items4=(doc.รายการสินค้า||[]).slice(0,4);
     const more=(doc.รายการสินค้า||[]).length>4?`<div style="color:var(--t3);font-size:12px;padding:3px 0">+${doc.รายการสินค้า.length-4} รายการ</div>`:'';
     // badge สถานะ (ขวา)
@@ -1394,7 +1392,7 @@ function renderHistory(){
       <div class="doc-actions">
         <button class="btn-sm primary" onclick="viewDoc(${doc.id})">🖨 พิมพ์</button>
         <button class="btn-sm" onclick="openEditDoc(${doc.id})">✏️ แก้ไข</button>
-        ${(isOut&&doc.สถานะ!=='คืนแล้ว'&&!isLoss)?`<button class="btn-sm" onclick="markReturned(${doc.id})">✓ คืนแล้ว</button>`:''}
+        ${(doc.ประเภท==='out'&&doc.สถานะ!=='คืนแล้ว')?`<button class="btn-sm" onclick="markReturned(${doc.id})">✓ คืนแล้ว</button>`:''}
         <button class="btn-sm danger" onclick="delDoc(${doc.id})">🗑</button>
       </div>
     </div>`;
@@ -1678,14 +1676,14 @@ function renderStock(){
       const name=it.รายการ||'';const qty=parseFloat(it.จำนวน)||0;if(!name||!qty)return;
       const size=it.ขนาด||'';const model=it.รุ่น||'';
       const t=doc.ประเภท,mf=doc.โยกจาก||'',mt=doc.โยกไป||'';
-      const mk=(p,n,s,m)=>{const k=n+'|'+s+'|'+m+'|'+p;if(!map[k])map[k]={name:n,size:s,model:m,proj:p,unit:it.หน่วย||'',in:0,out:0,loss:0,mvin:0,mvout:0};return k;};
+      const mk=(p,n,s,m)=>{const k=n+'|'+s+'|'+m+'|'+p;if(!map[k])map[k]={name:n,size:s,model:m,proj:p,unit:it.หน่วย||'',in:0,out:0,mvin:0,mvout:0};return k;};
       if(t==='in')map[mk(proj,name,size,model)].in+=qty;
       else if(t==='out')map[mk(proj,name,size,model)].out+=qty;
-      else if(t==='loss')map[mk(proj,name,size,model)].loss+=qty;
+      else if(t==='loss'){map[mk(proj,name,size,model)].loss=(map[mk(proj,name,size,model)].loss||0)+qty;}
       else if(t==='mv'){if(mf)map[mk(mf,name,size,model)].mvout+=qty;if(mt)map[mk(mt,name,size,model)].mvin+=qty;}
     });
   });
-  const rows=Object.values(map).map(r=>({...r,net:r.out-r.in-r.mvin+r.mvout-r.loss}))
+  const rows=Object.values(map).map(r=>({...r,loss:r.loss||0,net:r.out-r.in-r.mvin+r.mvout}))
     .sort((a,b)=>a.proj.localeCompare(b.proj,'th')||a.name.localeCompare(b.name,'th')||a.size.localeCompare(b.size)||a.model.localeCompare(b.model));
   const projs=[...new Set(rows.map(r=>r.proj))].sort();
   const pf=document.getElementById('stock-proj-filter');
@@ -1753,14 +1751,14 @@ function printStock(){
       const name=it.รายการ||'';const qty=parseFloat(it.จำนวน)||0;if(!name||!qty)return;
       const t=doc.ประเภท,mf=doc.โยกจาก||'',mt=doc.โยกไป||'';
       const size=it.ขนาด||'';const model=it.รุ่น||'';
-      const mk=(p,n,s,m)=>{const k=n+'|'+s+'|'+m+'|'+p;if(!map[k])map[k]={name:n,size:s,model:m,proj:p,unit:it.หน่วย||'',in:0,out:0,loss:0,mvin:0,mvout:0};return k;};
+      const mk=(p,n,s,m)=>{const k=n+'|'+s+'|'+m+'|'+p;if(!map[k])map[k]={name:n,size:s,model:m,proj:p,unit:it.หน่วย||'',in:0,out:0,mvin:0,mvout:0};return k;};
       if(t==='in')map[mk(proj,name,size,model)].in+=qty;
       else if(t==='out')map[mk(proj,name,size,model)].out+=qty;
-      else if(t==='loss')map[mk(proj,name,size,model)].loss+=qty;
+      else if(t==='loss'){map[mk(proj,name,size,model)].loss=(map[mk(proj,name,size,model)].loss||0)+qty;}
       else if(t==='mv'){if(mf)map[mk(mf,name,size,model)].mvout+=qty;if(mt)map[mk(mt,name,size,model)].mvin+=qty;}
     });
   });
-  const rows=Object.values(map).map(r=>({...r,net:r.out-r.in-r.mvin+r.mvout-r.loss}))
+  const rows=Object.values(map).map(r=>({...r,loss:r.loss||0,net:r.out-r.in-r.mvin+r.mvout}))
     .sort((a,b)=>a.proj.localeCompare(b.proj,'th')||a.name.localeCompare(b.name,'th')||(a.size||'').localeCompare(b.size||'')||(a.model||'').localeCompare(b.model||''));
 
   // กรองตาม proj filter ปัจจุบัน
@@ -2089,27 +2087,34 @@ function gasPost(action, body){
 function loadFromSheet(){
   return gasGet('getDocs').then(data=>{
     if(!data||!data.ok||!data.docs) return;
-    // อ่านจาก localStorage โดยตรง ป้องกัน in-memory docs ถูกทับไปแล้วก่อน
-    const localDocs=JSON.parse(localStorage.getItem('lbk_docs')||'[]');
-    const lm={};localDocs.forEach(d=>{lm[String(d.id)]=d;});
-    const SPECIAL_TYPES=['loss','mv'];
-    const SPECIAL_STATUS=['สูญเสีย','โยก','รับเข้าสโตร์'];
+    const lm={};docs.forEach(d=>{lm[String(d.id)]=d;});
+    // Sheet = source of truth, แต่ preserve ค่า local สำหรับ ประเภท/สถานะ
     const sheetDocs=data.docs.map(sd=>{
       const local=lm[String(sd.id)];
-      // หลักการ merge ประเภท/สถานะ:
-      // - ถ้า Sheet ส่งค่าพิเศษมา (loss/mv/สูญเสีย ฯลฯ) → ใช้ Sheet (Sheet sync ถูกต้องแล้ว)
-      // - ถ้า Sheet ส่งแค่ default (out/ออก) แต่ local มีค่าพิเศษ → ใช้ local (Sheet ยังไม่ sync)
-      // → ทำให้ Sheet อัปเดตได้จริง และไม่ทับค่าพิเศษที่ local บันทึกไว้
-      const sheetHasSpecial=SPECIAL_TYPES.includes(sd.ประเภท)||SPECIAL_STATUS.includes(sd.สถานะ);
-      const localHasSpecial=local&&(SPECIAL_TYPES.includes(local.ประเภท)||SPECIAL_STATUS.includes(local.สถานะ));
-      const finalType=sheetHasSpecial?sd.ประเภท:(localHasSpecial?local.ประเภท:(sd.ประเภท||local?.ประเภท||'out'));
-      const finalStatus=sheetHasSpecial?sd.สถานะ:(localHasSpecial?local.สถานะ:(sd.สถานะ||local?.สถานะ||'ออก'));
       return {
         ...sd,
-        ประเภท: finalType,
-        สถานะ:  finalStatus,
+        // ถ้า local มีประเภทที่ละเอียดกว่า (loss/buy/mv) ให้ใช้ local
+        ประเภท: local?.ประเภท||sd.ประเภท||'out',
+        สถานะ: local?.สถานะ||sd.สถานะ||'ออก',
         แหล่งข้อมูล: local?.แหล่งข้อมูล||sd.แหล่งข้อมูล||'',
         รูปถ่าย: local?.รูปถ่าย||[],
+        // preserve วันที่จาก local ถ้า Sheet ส่งมาผิด format
+        วันที่: (()=>{
+          const ld=local?.วันที่||'';
+          const sd_date=sd.วันที่||'';
+          // ถ้า local เป็น YYYY-MM-DD ให้ใช้ local
+          if(/^\d{4}-\d{2}-\d{2}$/.test(ld)) return ld;
+          // ถ้า sheet เป็น YYYY-MM-DD ให้ใช้ sheet
+          if(/^\d{4}-\d{2}-\d{2}$/.test(sd_date)) return sd_date;
+          // ถ้า sheet เป็น timestamp หรือรูปแบบอื่น แปลงเป็น YYYY-MM-DD
+          if(sd_date){
+            const d=new Date(sd_date);
+            if(!isNaN(d.getTime())){
+              return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+            }
+          }
+          return ld||sd_date||'';
+        })(),
         รายการสินค้า: typeof sd.รายการสินค้า==='string'
           ? (() => { try { return JSON.parse(sd.รายการสินค้า); } catch(e){ return []; } })()
           : (sd.รายการสินค้า||[]),
@@ -2123,17 +2128,7 @@ function loadFromSheet(){
     const queuedIds=new Set(syncQueue.filter(q=>q.action==='addDoc').map(q=>String(q.body?.id)));
     const localPending=JSON.parse(localStorage.getItem('lbk_docs')||'[]')
       .filter(d=>queuedIds.has(String(d.id))&&!sheetIds.has(String(d.id)));
-    // normalize: ถ้า สถานะ บอกชัดเจน ให้ fix ประเภท ให้ถูกต้องเสมอ
-    const normalized=[...sheetDocs,...localPending].map(d=>{
-      let t=d.ประเภท;
-      if(d.สถานะ==='สูญเสีย') t='loss';
-      else if(d.สถานะ==='โยก') t='mv';
-      else if(d.สถานะ==='รับเข้าสโตร์') t='in';
-      else if(d.สถานะ==='คืน'||d.สถานะ==='เข้า') t='in';
-      else if(d.สถานะ==='ออก') t='out';
-      return t!==d.ประเภท?{...d,ประเภท:t}:d;
-    });
-    docs=normalized;
+    docs=[...sheetDocs,...localPending];
     localStorage.setItem('lbk_docs',JSON.stringify(docs));
     renderHistory();
     renderStock();
@@ -2293,13 +2288,6 @@ function saveEditDoc(){
   docs[idx].ผู้นำของ    = document.getElementById('edit-carrier').value.trim();
   docs[idx].หมายเหตุ    = document.getElementById('edit-note').value.trim();
   docs[idx].สถานะ       = document.getElementById('edit-status')?.value || docs[idx].สถานะ;
-  // อัปเดต ประเภท ให้ตรงกับสถานะ เพื่อให้หัวกระดาษและการคำนวณสต็อกถูกต้อง
-  const newStatus = docs[idx].สถานะ;
-  if(newStatus==='ออก') docs[idx].ประเภท='out';
-  else if(newStatus==='สูญเสีย') docs[idx].ประเภท='loss';
-  else if(newStatus==='โยก') docs[idx].ประเภท='mv';
-  else if(newStatus==='รับเข้าสโตร์'){ docs[idx].ประเภท='in'; docs[idx].แหล่งข้อมูล='สโตร์'; }
-  else if(newStatus==='คืน') { docs[idx].ประเภท='in'; docs[idx].แหล่งข้อมูล=''; }
   docs[idx].รายการสินค้า = editItems.map(({eid:_,...r})=>r);
   docs[idx].รูปถ่าย      = [...editPhotos];
   localStorage.setItem('lbk_docs', JSON.stringify(docs));
@@ -2558,6 +2546,7 @@ function printAuditPDF() {
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'Sarabun',sans-serif;background:#fff;font-size:11pt}
 table{width:100%;border-collapse:collapse}
+thead{display:table-header-group}
 @media print{@page{size:A4;margin:10mm}body{margin:0}.no-print{display:none!important}}
 </style></head><body>
 <div class="no-print" style="text-align:center;padding:8px;background:#f5f5f5">
@@ -2595,6 +2584,7 @@ table{width:100%;border-collapse:collapse}
   </table>
 
   <table>
+    <thead>
     <tr style="background:#1B3A6B;color:#fff;font-size:10pt;font-weight:700">
       <th style="border:1px solid #135;padding:5px 3px;text-align:center;width:28px">ลำดับ</th>
       <th style="border:1px solid #135;padding:5px 6px;text-align:left">ชื่ออุปกรณ์</th>
@@ -2606,7 +2596,10 @@ table{width:100%;border-collapse:collapse}
       <th style="border:1px solid #135;padding:5px 6px;text-align:left">หมายเหตุ</th>
       <th style="border:1px solid #135;padding:5px 3px;text-align:center;width:65px">วันที่ตรวจ</th>
     </tr>
+    </thead>
+    <tbody>
     ${tableRows}
+    </tbody>
   </table>
 
   <div style="margin-top:14px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px">
@@ -2664,7 +2657,6 @@ table{width:100%;border-collapse:collapse}
           <option value="คืน">นำของเข้า</option>
           <option value="รับเข้าสโตร์">รับเข้าสโตร์</option>
           <option value="โยก">โยกย้าย</option>
-          <option value="สูญเสีย">⚠️ สูญเสีย</option>
         </select>
       </div>
       <div style="font-size:11px;font-weight:600;color:var(--t2);text-transform:uppercase;letter-spacing:.07em;padding:4px 0 8px">รายการอุปกรณ์</div>
