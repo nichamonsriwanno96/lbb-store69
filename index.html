@@ -1683,7 +1683,7 @@ function renderStock(){
       else if(t==='mv'){if(mf)map[mk(mf,name,size,model)].mvout+=qty;if(mt)map[mk(mt,name,size,model)].mvin+=qty;}
     });
   });
-  const rows=Object.values(map).map(r=>({...r,loss:r.loss||0,net:r.out-r.in-r.mvin+r.mvout}))
+  const rows=Object.values(map).map(r=>({...r,loss:r.loss||0,net:(r.out+r.mvin)-r.in-r.mvout-(r.loss||0)}))
     .sort((a,b)=>a.proj.localeCompare(b.proj,'th')||a.name.localeCompare(b.name,'th')||a.size.localeCompare(b.size)||a.model.localeCompare(b.model));
   const projs=[...new Set(rows.map(r=>r.proj))].sort();
   const pf=document.getElementById('stock-proj-filter');
@@ -1732,11 +1732,11 @@ function renderStock(){
         return`<div style="display:flex;align-items:center;padding:8px 0;border-bottom:1px dashed var(--border);gap:8px">
           <div style="flex:1;min-width:0">
             <div style="font-size:14px;color:var(--t1);display:flex;align-items:center;flex-wrap:wrap;gap:4px">${r.name}${r.size?'<span style="font-size:11px;color:var(--blue);background:var(--blue-bg);padding:1px 6px;border-radius:6px">'+ r.size +'</span>':''} ${r.model?'<span style="font-size:11px;color:var(--t2)">'+ r.model +'</span>':''} ${auditBadge}</div>
-            <div style="font-size:11px;color:var(--t3);margin-top:2px">ออก ${r.out} | คืน ${r.in}${r.loss?` | ⚠️ สูญ ${r.loss}`:''}${r.mvin||r.mvout?' | โยกเข้า '+r.mvin+' โยกออก '+r.mvout:''}${auditInfo}</div>
+            <div style="font-size:11px;color:var(--t3);margin-top:2px">ออก ${r.out} | คืน ${r.in}${r.loss?` | ⚠️ สูญ ${r.loss}`:''}${r.mvout?` | โยกออก ${r.mvout}`:''}${r.mvin?` | โยกเข้า ${r.mvin}`:''}${auditInfo}</div>
           </div>
           <div style="text-align:right;flex-shrink:0">
             <div style="font-size:18px;font-weight:700;font-family:var(--mono);color:${c}">${r.net}</div>
-            <div style="font-size:10px;color:var(--t3)">ต้องคืน</div>
+            <div style="font-size:10px;color:var(--t3)">${r.net===0?"คืนครบ ✓":"ต้องคืน"}</div>
           </div>
         </div>`;}).join('')}
     </div>`).join('');
@@ -1758,7 +1758,7 @@ function printStock(){
       else if(t==='mv'){if(mf)map[mk(mf,name,size,model)].mvout+=qty;if(mt)map[mk(mt,name,size,model)].mvin+=qty;}
     });
   });
-  const rows=Object.values(map).map(r=>({...r,loss:r.loss||0,net:r.out-r.in-r.mvin+r.mvout}))
+  const rows=Object.values(map).map(r=>({...r,loss:r.loss||0,net:(r.out+r.mvin)-r.in-r.mvout-(r.loss||0)}))
     .sort((a,b)=>a.proj.localeCompare(b.proj,'th')||a.name.localeCompare(b.name,'th')||(a.size||'').localeCompare(b.size||'')||(a.model||'').localeCompare(b.model||''));
 
   // กรองตาม proj filter ปัจจุบัน
@@ -1800,7 +1800,7 @@ function printStock(){
         <td style="border:1px solid #ddd;text-align:center;font-size:10pt;padding:4px">${r.out||'-'}</td>
         <td style="border:1px solid #ddd;text-align:center;font-size:10pt;padding:4px">${r.in||'-'}</td>
         <td style="border:1px solid #ddd;text-align:center;font-size:10pt;padding:4px;color:${r.loss?'#c0392b':'#aaa'}">${r.loss||'-'}</td>
-        <td style="border:1px solid #ddd;text-align:center;font-size:11pt;font-weight:700;padding:4px;background:${netBg};color:${netColor}">${r.net>0?r.net:r.net===0?'✓':r.net}</td>
+        <td style="border:1px solid #ddd;text-align:center;font-size:11pt;font-weight:700;padding:4px;background:${netBg};color:${netColor}">${r.net}</td>
       </tr>`;
     }).join('');
     // แถวสรุปท้ายกลุ่ม
@@ -1814,7 +1814,7 @@ function printStock(){
       <td style="border:1px solid #999;text-align:center;padding:4px">${totalOut}</td>
       <td style="border:1px solid #999;text-align:center;padding:4px">${totalIn}</td>
       <td style="border:1px solid #999;text-align:center;padding:4px;color:#c0392b">${totalLoss||'-'}</td>
-      <td style="border:1px solid #999;text-align:center;padding:4px;color:${netC}">${totalNet>0?totalNet:totalNet===0?'✓':totalNet}</td>
+      <td style="border:1px solid #999;text-align:center;padding:4px;color:${netC}">${totalNet}</td>
     </tr><tr><td colspan="7" style="padding:8px;border:none"></td></tr>`;
     return projHeader+itemRows+summaryRow;
   }).join('');
