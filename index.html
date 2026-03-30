@@ -1071,21 +1071,23 @@ function catSearch(id,val){
 }
 
 function quickAddToCatalog(itemId, name){
-  // เพิ่มเข้า customCatalog ทันที แล้วถามหน่วย
-  const unit = prompt(`หน่วยของ "${name}" คืออะไร?\nเช่น ตัว, อัน, เส้น, ท่อน`,'');
-  if(unit===null) return; // กด cancel
-  const code = 'CUS-'+Date.now().toString().slice(-4);
-  const newItem = {code, name, unit:unit||'อัน', id:'cat_'+Date.now()};
-  customCatalog.push(newItem);
-  localStorage.setItem('lbk_catalog', JSON.stringify(customCatalog));
-  gasPost('saveCatalogItem', newItem).catch(()=>{});
-  // เติมค่าลงในช่องกรอก
-  const ni=document.getElementById(`in-${itemId}-name`);
-  const ui=document.getElementById(`in-${itemId}-unit`);
-  if(ni)ni.value=name;
-  if(ui&&!ui.value)ui.value=unit||'อัน';
-  hideCat(itemId);
-  toast(`เพิ่ม "${name}" ในทะเบียนแล้ว ✓`,'ok');
+  // เปิด catalog modal พร้อมชื่อที่กรอกไว้ แล้ว callback กลับมาเติมช่อง
+  window._quickAddCallback = function(addedName, addedUnit){
+    const ni=document.getElementById(`in-${itemId}-name`);
+    const ui=document.getElementById(`in-${itemId}-unit`);
+    if(ni)ni.value=addedName;
+    if(ui&&!ui.value)ui.value=addedUnit;
+    hideCat(itemId);
+  };
+  // เปิด modal เพิ่มอุปกรณ์ พร้อมชื่อ
+  document.getElementById('catalog-modal-title').textContent='เพิ่มอุปกรณ์ใหม่';
+  document.getElementById('cm-code').value='CUS-'+Date.now().toString().slice(-4);
+  document.getElementById('cm-name').value=name;
+  document.getElementById('cm-unit').value='';
+  document.getElementById('cm-edit-idx').value='';
+  document.getElementById('cm-edit-id').value='';
+  document.getElementById('catalog-modal').classList.add('open');
+  setTimeout(()=>document.getElementById('cm-unit')?.focus(),100);
 }
 function pickCat(id,name,unit,code){
   const ni=document.getElementById(`in-${id}-name`);
@@ -2036,6 +2038,14 @@ function saveCatalogItem(){
     gasPost('saveCatalogItem',{code,name,unit,id:newId}).catch(()=>{});
   }
   localStorage.setItem('lbk_catalog', JSON.stringify(customCatalog));
+  // sync catalog ให้เครื่องอื่นด้วย
+  loadCatalogFromSheet();
+  // callback สำหรับ quickAdd
+  if(window._quickAddCallback){
+    const savedName=name, savedUnit=unit;
+    window._quickAddCallback(savedName, savedUnit);
+    window._quickAddCallback=null;
+  }
   closeCatalogModal();
   renderCatalog();
 }
@@ -2210,6 +2220,7 @@ function loadFromSheet(){
     renderHistory();
     renderStock();
     if(document.getElementById('pg-store')?.classList.contains('on')) renderStoreStock();
+    loadCatalogFromSheet();
   }).catch(e=>console.warn('loadFromSheet:',e));
 }
 function loadProjects(){
