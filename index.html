@@ -566,7 +566,10 @@ input,select,textarea,button{font-family:var(--font)}
 <div id="pg-catalog" class="pg no-print">
   <div style="padding:12px 12px 0;display:flex;align-items:center;justify-content:space-between">
     <div style="font-size:18px;font-weight:700">ทะเบียนอุปกรณ์</div>
-    <button class="btn-sm primary" style="flex:0;padding:8px 14px" onclick="openAddCatalog()">＋ เพิ่ม</button>
+    <div style="display:flex;gap:6px">
+      <button class="btn-sm" style="flex:0;padding:8px 14px;color:var(--out);border-color:rgba(230,126,34,.3);background:var(--out-bg);white-space:nowrap" onclick="openMergeCatalog()">🔀 รวมชื่อ</button>
+      <button class="btn-sm primary" style="flex:0;padding:8px 14px" onclick="openAddCatalog()">＋ เพิ่ม</button>
+    </div>
   </div>
   <div style="padding:12px 12px 6px"><input class="fi" id="catalog-search" placeholder="ค้นหา…" oninput="renderCatalog(this.value)"></div>
   <div id="catalog-list" style="padding:0 12px"></div>
@@ -618,7 +621,7 @@ input,select,textarea,button{font-family:var(--font)}
     </div>
     <div style="padding:12px 16px 4px">
       <div style="font-size:12px;color:var(--t2);margin-bottom:8px">
-        ซ่อน = ไม่ขึ้นใน dropdown (ข้อมูลเอกสารเดิมยังอยู่ครบ) | ลบ = ลบออกจากรายการ (เฉพาะที่เพิ่มเอง)
+        ซ่อน/นำออก = ไม่ขึ้นใน dropdown แต่ข้อมูลเอกสารยังอยู่ครบ | ลบ = ลบออกจากรายการที่เพิ่มเอง
       </div>
       <div id="proj-list"></div>
     </div>
@@ -842,11 +845,18 @@ function setType(t){
   refreshDocNo();
 }
 
-function refreshDocNo(){
+function genDocNo(){
   const p=fType==='out'?'OUT':fType==='mv'?'MOV':fType==='loss'?'LOSS':fType==='buy'?'BUY':'IN';
-  const d=new Date(); const yy=(d.getFullYear()+543).toString().slice(2);
+  const d=new Date();
+  const yy=(d.getFullYear()+543).toString().slice(2);
   const mm=String(d.getMonth()+1).padStart(2,'0');
-  document.getElementById('f-docno').placeholder=`${p}-${yy}${mm}-${String(docNum).padStart(3,'0')}`;
+  // ใช้ timestamp 4 หลักท้าย + random 2 หลัก = unique ทุกเครื่อง
+  const ts=String(Date.now()).slice(-4);
+  const rnd=String(Math.floor(Math.random()*99)).padStart(2,'0');
+  return `${p}-${yy}${mm}-${ts}${rnd}`;
+}
+function refreshDocNo(){
+  document.getElementById('f-docno').placeholder=genDocNo();
 }
 
 // ── PROJECT COMBO ──────────────────────────────────────────────────────────────
@@ -913,7 +923,9 @@ function renderProjManager(){
           ${isHidden?'แสดง':'ซ่อน'}
         </button>
         ${!isDefault?`<button class="btn-sm danger" style="flex:0;padding:6px 10px;font-size:12px"
-          onclick="deleteCustomProj('${esc(p)}')">ลบ</button>`:''}
+          onclick="deleteCustomProj('${esc(p)}')">ลบ</button>`:
+          `<button class="btn-sm danger" style="flex:0;padding:6px 10px;font-size:12px"
+          onclick="toggleHideProj('${esc(p)}')" title="ซ่อนออกจาก dropdown (ข้อมูลยังอยู่)">${isHidden?'แสดง':'นำออก'}</button>`}
       </div>
     </div>`;
   }).join('');
@@ -1031,13 +1043,49 @@ function catSearch(id,val){
   const q=val.toLowerCase();
   const _cat=allCatalogList();
   const found=_cat.filter(c=>c.name.toLowerCase().includes(q)||c.code.toLowerCase().includes(q)).slice(0,8);
-  if(!found.length){box.style.display='none';return}
-  box.innerHTML=found.map(c=>`
+  // ตรวจว่าชื่อตรงทุกตัวอักษรกับรายการในทะเบียนหรือเปล่า
+  const exactMatch=_cat.some(c=>c.name.toLowerCase()===q);
+  if(!found.length){
+    // ไม่พบเลย — เตือน + ปุ่มเพิ่มทะเบียน
+    box.innerHTML=`
+      <div style="padding:8px 12px;font-size:12px;color:var(--out)">⚠️ ไม่มีในทะเบียน</div>
+      <div class="cat-opt new" onmousedown="quickAddToCatalog(${id},'${esc(val)}')">
+        ＋ เพิ่ม "${val}" เข้าทะเบียนอุปกรณ์
+      </div>`;
+    box.style.display='block';
+    return;
+  }
+  let html = found.map(c=>`
     <div class="cat-opt" onmousedown="pickCat(${id},'${esc(c.name)}','${esc(c.unit)}','${c.code}')">
       <span class="cat-code">${c.code}</span>${c.name}
       <span class="cat-size">${c.unit}</span>
     </div>`).join('');
+  // ถ้าพิมพ์ยาวพอแต่ยังไม่ตรงทุกตัว — แสดงปุ่มเพิ่ม
+  if(!exactMatch && val.length>=2){
+    html += `<div class="cat-opt new" style="border-top:1px solid var(--border);margin-top:2px" onmousedown="quickAddToCatalog(${id},'${esc(val)}')">
+      ＋ เพิ่ม "${val}" เข้าทะเบียน (ชื่อใหม่)
+    </div>`;
+  }
+  box.innerHTML=html;
   box.style.display='block';
+}
+
+function quickAddToCatalog(itemId, name){
+  // เพิ่มเข้า customCatalog ทันที แล้วถามหน่วย
+  const unit = prompt(`หน่วยของ "${name}" คืออะไร?\nเช่น ตัว, อัน, เส้น, ท่อน`,'');
+  if(unit===null) return; // กด cancel
+  const code = 'CUS-'+Date.now().toString().slice(-4);
+  const newItem = {code, name, unit:unit||'อัน', id:'cat_'+Date.now()};
+  customCatalog.push(newItem);
+  localStorage.setItem('lbk_catalog', JSON.stringify(customCatalog));
+  gasPost('saveCatalogItem', newItem).catch(()=>{});
+  // เติมค่าลงในช่องกรอก
+  const ni=document.getElementById(`in-${itemId}-name`);
+  const ui=document.getElementById(`in-${itemId}-unit`);
+  if(ni)ni.value=name;
+  if(ui&&!ui.value)ui.value=unit||'อัน';
+  hideCat(itemId);
+  toast(`เพิ่ม "${name}" ในทะเบียนแล้ว ✓`,'ok');
 }
 function pickCat(id,name,unit,code){
   const ni=document.getElementById(`in-${id}-name`);
@@ -1071,7 +1119,7 @@ function renderPhotos(){
 function saveDoc(){
   const proj=document.getElementById('f-proj').value.trim();
   const date=document.getElementById('f-date').value;
-  const docno=document.getElementById('f-docno').value.trim()||document.getElementById('f-docno').placeholder;
+  const docno=document.getElementById('f-docno').value.trim()||(()=>{const n=genDocNo();document.getElementById('f-docno').placeholder=n;return n;})();
   if(!proj){toast('กรุณากรอกชื่อโครงการ','err');return}
   if(!date){toast('กรุณาเลือกวันที่','err');return}
   if(fType==='mv'){
@@ -1106,9 +1154,8 @@ function saveDoc(){
     ประเภทสูญเสีย: fType==='loss'?(document.getElementById('f-loss-type')?.value||''):'',
     รายละเอียดสูญเสีย: fType==='loss'?(document.getElementById('f-loss-detail')?.value.trim()||''):'',
   };
-  docs.unshift(doc); docNum++;
+  docs.unshift(doc);
   localStorage.setItem('lbk_docs',JSON.stringify(docs));
-  localStorage.setItem('lbk_num',docNum);
   // sync to Sheet
   const _p=Object.assign({},doc);
   _p.รูปถ่าย=[];_p.จำนวนรูป=(doc.รูปถ่าย||[]).length;
@@ -1887,12 +1934,24 @@ const BASE_CATALOG=[
   {code:'TRF-0001',name:'กรวยจราจร',unit:'อัน'},{code:'CON-0027',name:'ใบตัด',unit:'ใบ'},
 ];
 function allCatalogList(){
+  // รวมทุกแหล่ง: customCatalog + sheetCatalog + BASE_CATALOG (fallback)
+  // ถ้า code เดียวกัน ใช้ customCatalog ก่อน (ผู้ใช้แก้ไขเอง)
   const sc=window._sheetCatalog||JSON.parse(localStorage.getItem('lbb_sheet_cat')||'[]');
-  const all=[...BASE_CATALOG];
-  const seen=new Set(BASE_CATALOG.map(c=>c.code+'|'+c.name));
-  sc.forEach(c=>{const k=c.code+'|'+c.name;if(!seen.has(k)){seen.add(k);all.push(c);}});
-  customCatalog.forEach(c=>{const k=c.code+'|'+c.name;if(!seen.has(k)){seen.add(k);all.push(c);}});
-  return all;
+  const all=[];
+  const seenCode=new Set();
+  // 1. customCatalog ก่อน (user-edited)
+  customCatalog.forEach(c=>{
+    if(!seenCode.has(c.code)){seenCode.add(c.code);all.push({...c,editable:true});}
+  });
+  // 2. sheetCatalog
+  sc.forEach(c=>{
+    if(!seenCode.has(c.code)){seenCode.add(c.code);all.push({...c,editable:true});}
+  });
+  // 3. BASE_CATALOG เป็น fallback — ถ้า code ยังไม่มี
+  BASE_CATALOG.forEach(c=>{
+    if(!seenCode.has(c.code)){seenCode.add(c.code);all.push({...c,editable:false});}
+  });
+  return all.sort((a,b)=>a.name.localeCompare(b.name,'th')||a.code.localeCompare(b.code));
 }
 function renderCatalog(q){
   const lq=(q||document.getElementById('catalog-search')?.value||'').toLowerCase();
@@ -1900,21 +1959,24 @@ function renderCatalog(q){
   const all=allCatalogList().filter(c=>!lq||c.name.toLowerCase().includes(lq)||c.code.toLowerCase().includes(lq));
   if(!all.length){el.innerHTML=`<div style="text-align:center;padding:32px;color:var(--t3)">ไม่พบรายการ</div>`;return;}
   el.innerHTML=all.map((c,i)=>{
-    const ri=customCatalog.findIndex(x=>x.code===c.code&&x.name===c.name);
-    const isCustom=ri>=0;
+    const custIdx=customCatalog.findIndex(x=>x.code===c.code);
+    const isCustom=custIdx>=0;
+    const isBase=!c.editable;
+    const tag=isCustom?'<span style="font-size:10px;background:var(--in-bg);color:var(--in);padding:1px 6px;border-radius:10px">แก้ไขแล้ว</span>':
+               isBase?'<span style="font-size:10px;background:var(--s3);color:var(--t2);padding:1px 6px;border-radius:10px">ค่าเริ่มต้น</span>':'';
     return`<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">
       <div style="flex:1;min-width:0">
-        <div style="display:flex;align-items:center;gap:6px">
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
           <span style="font-family:var(--mono);font-size:11px;color:var(--blue)">${c.code}</span>
-          ${isCustom?'<span style="font-size:10px;background:var(--in-bg);color:var(--in);padding:1px 6px;border-radius:10px">เพิ่มเอง</span>':''}
+          ${tag}
         </div>
         <div style="font-size:14px;color:var(--t1);margin-top:2px">${c.name}</div>
         <div style="font-size:12px;color:var(--t3)">หน่วย: ${c.unit||'-'}</div>
       </div>
-      ${isCustom?`<div style="display:flex;gap:6px;flex-shrink:0">
-        <button class="btn-sm" style="flex:0;padding:6px 10px" onclick="openEditCatalog(${ri})">✏️</button>
-        <button class="btn-sm danger" style="flex:0;padding:6px 10px" onclick="delCatalog(${ri})">🗑</button>
-      </div>`:''}
+      <div style="display:flex;gap:6px;flex-shrink:0">
+        <button class="btn-sm" style="flex:0;padding:6px 10px" onclick="openEditCatalogByCode('${c.code.replace(/'/g,"\'")}')">✏️</button>
+        ${isCustom?`<button class="btn-sm danger" style="flex:0;padding:6px 10px" onclick="delCatalog(${custIdx})">🗑</button>`:''}
+      </div>
     </div>`;
   }).join('');
 }
@@ -1925,6 +1987,21 @@ function openAddCatalog(){
   });
   document.getElementById('catalog-modal').classList.add('open');
   setTimeout(()=>document.getElementById('cm-name')?.focus(), 100);
+}
+function openEditCatalogByCode(code){
+  // หาใน customCatalog ก่อน
+  const custIdx=customCatalog.findIndex(c=>c.code===code);
+  if(custIdx>=0){ openEditCatalog(custIdx); return; }
+  // ถ้าไม่มีใน custom ให้สร้างใหม่จาก BASE หรือ Sheet
+  const src=allCatalogList().find(c=>c.code===code);
+  if(!src){ toast('ไม่พบรายการ','err'); return; }
+  document.getElementById('catalog-modal-title').textContent = 'แก้ไขอุปกรณ์';
+  document.getElementById('cm-code').value = src.code||'';
+  document.getElementById('cm-name').value = src.name||'';
+  document.getElementById('cm-unit').value = src.unit||'';
+  document.getElementById('cm-edit-idx').value = '';  // ยังไม่มีใน custom
+  document.getElementById('cm-edit-id').value = src.id||'';
+  document.getElementById('catalog-modal').classList.add('open');
 }
 function openEditCatalog(idx){
   const c = customCatalog[idx];
@@ -2630,6 +2707,77 @@ thead{display:table-header-group}
   else toast('อนุญาต popup เพื่อเปิด PDF', 'err');
 }
 
+// ── MERGE CATALOG ─────────────────────────────────────────────────────────────
+function openMergeCatalog(){
+  document.getElementById('merge-old').value='';
+  document.getElementById('merge-new').value='';
+  document.getElementById('merge-old-count').textContent='';
+  document.getElementById('merge-preview').textContent='กรอกชื่อเก่าเพื่อดูตัวอย่าง';
+  document.getElementById('merge-modal').classList.add('open');
+  setTimeout(()=>document.getElementById('merge-old').focus(),100);
+}
+
+function closeMergeCatalog(){
+  document.getElementById('merge-modal').classList.remove('open');
+}
+function previewMerge(){
+  const oldName=document.getElementById('merge-old').value.trim();
+  const newName=document.getElementById('merge-new').value.trim();
+  const countEl=document.getElementById('merge-old-count');
+  const previewEl=document.getElementById('merge-preview');
+  if(!oldName){countEl.textContent='';previewEl.textContent='กรอกชื่อเก่าเพื่อดูตัวอย่าง';return;}
+  // นับว่ามีกี่เอกสาร กี่รายการ ที่ใช้ชื่อนี้
+  let docCount=0, itemCount=0;
+  const projs=new Set();
+  docs.forEach(doc=>{
+    let found=false;
+    (doc.รายการสินค้า||[]).forEach(it=>{
+      if((it.รายการ||'').trim()===oldName){found=true;itemCount++;}
+    });
+    if(found){docCount++;if(doc.โครงการ)projs.add(doc.โครงการ);}
+  });
+  if(docCount===0){
+    countEl.innerHTML='<span style="color:var(--red)">ไม่พบชื่อนี้ในเอกสารใดเลย</span>';
+    previewEl.textContent='';
+    return;
+  }
+  countEl.innerHTML=`<span style="color:var(--in)">พบใน ${docCount} เอกสาร รวม ${itemCount} รายการ</span><br><span style="color:var(--t3)">โครงการ: ${[...projs].join(', ')}</span>`;
+  if(newName){
+    previewEl.innerHTML=`"<strong style="color:var(--red)">${oldName}</strong>" → "<strong style="color:var(--in)">${newName}</strong>"<br><span style="color:var(--t2)">จะแก้ไข ${itemCount} รายการใน ${docCount} เอกสาร</span>`;
+  } else {
+    previewEl.textContent='กรอกชื่อใหม่เพื่อดูตัวอย่าง';
+  }
+}
+function doMergeCatalog(){
+  const oldName=document.getElementById('merge-old').value.trim();
+  const newName=document.getElementById('merge-new').value.trim();
+  if(!oldName||!newName){toast('กรุณากรอกชื่อเก่าและชื่อใหม่','err');return;}
+  if(oldName===newName){toast('ชื่อเก่าและชื่อใหม่เหมือนกัน','err');return;}
+  if(!confirm(`แก้ไข "${oldName}" → "${newName}" ในทุกเอกสาร?
+ไม่สามารถย้อนกลับได้`))return;
+  let changed=0;
+  docs.forEach(doc=>{
+    (doc.รายการสินค้า||[]).forEach(it=>{
+      if((it.รายการ||'').trim()===oldName){
+        it.รายการ=newName;
+        changed++;
+      }
+    });
+  });
+  if(changed===0){toast('ไม่พบรายการที่ตรงกัน','err');return;}
+  localStorage.setItem('lbk_docs',JSON.stringify(docs));
+  // sync ทุกเอกสารที่เปลี่ยนขึ้น Sheet
+  docs.forEach(doc=>{
+    if((doc.รายการสินค้า||[]).some(it=>it.รายการ===newName)){
+      const p=Object.assign({},doc);
+      p.รูปถ่าย=[];p.รายการสินค้า=JSON.stringify(p.รายการสินค้า||[]);p.ลายเซ็น=JSON.stringify(p.ลายเซ็น||{});
+      gasPost('addDoc',p).catch(()=>{});
+    }
+  });
+  closeMergeCatalog();
+  renderHistory();renderStock();renderStoreStock();
+  toast(`แก้ไขแล้ว ${changed} รายการ ✓`,'ok');
+}
 </script>
 
 <!-- EDIT MODAL -->
@@ -2737,5 +2885,36 @@ thead{display:table-header-group}
     </div>
   </div>
 </div>
+
+<!-- MERGE CATALOG MODAL -->
+<div class="modal-bg" id="merge-modal" onclick="if(event.target===this)closeMergeCatalog()">
+  <div class="modal-sheet" style="max-width:480px">
+    <div class="modal-hd">
+      <div>
+        <div class="modal-title">🔀 รวมชื่ออุปกรณ์</div>
+        <div style="font-size:12px;color:var(--t2);margin-top:2px">แก้ชื่อเก่าในทุกเอกสารเป็นชื่อใหม่</div>
+      </div>
+      <button class="btn-close" onclick="closeMergeCatalog()">✕</button>
+    </div>
+    <div style="padding:16px">
+      <div class="f" style="padding:0 0 12px">
+        <div class="fl">ชื่อเก่า (ที่ต้องการเปลี่ยน) <span class="req">*</span></div>
+        <input class="fi" id="merge-old" placeholder="เช่น ก้านเจาะ" oninput="previewMerge()">
+        <div id="merge-old-count" style="font-size:11px;color:var(--t2);margin-top:4px"></div>
+      </div>
+      <div style="text-align:center;font-size:20px;color:var(--t2);margin-bottom:12px">↓</div>
+      <div class="f" style="padding:0 0 12px">
+        <div class="fl">ชื่อใหม่ (ที่ถูกต้อง) <span class="req">*</span></div>
+        <input class="fi" id="merge-new" placeholder="เช่น ก้านเจาะดิน" oninput="previewMerge()">
+      </div>
+      <div id="merge-preview" style="background:var(--s2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:13px;color:var(--t2);min-height:40px">กรอกชื่อเก่าเพื่อดูตัวอย่าง</div>
+      <div class="btn-row" style="padding:0">
+        <button class="btn btn-blue" onclick="doMergeCatalog()">🔀 รวมชื่อในทุกเอกสาร</button>
+        <button class="btn btn-ghost" onclick="closeMergeCatalog()">ยกเลิก</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
