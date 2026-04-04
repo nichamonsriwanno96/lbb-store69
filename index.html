@@ -107,6 +107,9 @@ input,select,textarea,button{font-family:var(--font)}
 /* LOSS TYPE */
 .type-pill.loss-on{border-color:#f85149;background:rgba(248,81,73,.1)}
 .type-pill.buy-on{border-color:var(--blue);background:var(--blue-bg)}
+.type-pill.steel-on{border-color:#b45309;background:rgba(180,83,9,.1)}
+
+.steel-sheet{background:var(--card);border-radius:14px;width:100%;max-width:680px;margin:auto}
 .s-buy{background:var(--blue-bg);color:var(--blue)}
 .s-ret{background:var(--in-bg);color:var(--in)}
 .code-loss{background:rgba(248,81,73,.12);color:var(--red)}
@@ -327,6 +330,7 @@ input,select,textarea,button{font-family:var(--font)}
   <div class="nav-brand"><em>LBB</em> สโตร์</div>
   <div class="tabs">
     <button class="tab on" onclick="goPage('form')">กรอก</button>
+    <button class="tab" onclick="goPage('steel')">🔩 เหล็ก</button>
     <button class="tab" onclick="goPage('history')">ประวัติ</button>
     <button class="tab" onclick="goPage('store')">🏪 สโตร์</button>
     <button class="tab" onclick="goPage('catalog')">ทะเบียน</button>
@@ -372,6 +376,7 @@ input,select,textarea,button{font-family:var(--font)}
       <div class="lbl">สูญเสีย</div>
       <div class="sub">ฝัง/หัก/สูญหาย</div>
     </div>
+
   </div>
 
   <!-- Loss fields -->
@@ -545,6 +550,7 @@ input,select,textarea,button{font-family:var(--font)}
       style="flex:1;padding:9px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:var(--font);border:1.5px solid var(--border);background:transparent;color:var(--t2);transition:all .15s">
       📍 แยกโครงการ
     </button>
+
   </div>
   <!-- STORE VIEW -->
   <div id="view-store">
@@ -558,6 +564,10 @@ input,select,textarea,button{font-family:var(--font)}
     <div style="padding:10px 12px 4px"><input class="fi" id="stock-search" placeholder="ค้นหาชื่ออุปกรณ์…" oninput="renderStock()"></div>
     <div class="filter-row" id="stock-proj-filter"></div>
     <div id="stock-list" style="padding:0 12px"></div>
+  </div>
+<div style="padding:4px 12px 4px"><input class="fi" id="steel-stock-search" placeholder="ค้นหาขนาดเหล็ก…" oninput="renderSteelStock()"></div>
+    <div id="steel-stock-proj-filter" class="filter-row"></div>
+    <div id="steel-stock-list" style="padding:0 12px"></div>
   </div>
   <div class="spacer"></div>
 </div>
@@ -1173,7 +1183,7 @@ function saveDoc(){
 
 function clearForm(){
   ['f-proj','f-docno','f-req','f-carrier','f-car','f-s1','f-s2','f-s3','f-d1','f-d2','f-d3','f-note','f-mv-from','f-mv-to'].forEach(id=>{
-    const el=document.getElementById(id);if(el)el.value='';
+    const el=document.getElementById(id);if(el&&el.type!=='hidden')el.value='';
   });
   document.getElementById('f-date').value=localDateStr();
   items=[];photos=[];renderPhotos();addItem();refreshDocNo();
@@ -1765,7 +1775,18 @@ function renderStock(){
   const groups={};filtered.forEach(r=>{if(!groups[r.proj])groups[r.proj]=[];groups[r.proj].push(r);});
   el.innerHTML=Object.entries(groups).map(([proj,items])=>`
     <div style="margin-bottom:12px">
-      <div style="font-size:12px;font-weight:600;color:var(--blue);padding:6px 0 4px;border-bottom:1px solid var(--border);margin-bottom:4px">📍 ${proj}</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0 4px;border-bottom:1px solid var(--border);margin-bottom:4px">
+        <div style="font-size:12px;font-weight:600;color:var(--blue)">📍 ${proj}</div>
+        ${(()=>{
+          const sr=steelRecords.filter(r=>r.proj===proj);
+          if(!sr.length) return '';
+          const totalW=sr.reduce((s,r)=>s+(parseFloat(r.grandW)||0),0);
+          const lastDate=fmtDate(sr[0].date)||sr[0].dateDisplay||sr[0].date;
+          return `<div style="font-size:11px;color:#b45309;background:rgba(180,83,9,.08);padding:2px 8px;border-radius:10px">
+            🔩 เหล็ก ${totalW.toFixed(3)} kg (${sr.length} ครั้ง) | ล่าสุด ${lastDate}
+          </div>`;
+        })()}
+      </div>
       ${items.map(r=>{
         const c=r.net>0?'var(--in)':r.net<0?'var(--red)':'var(--t3)';
         const auditKey=r.name+'|'+(r.size||'')+'|'+(r.model||'');
@@ -2072,13 +2093,14 @@ function goPage(name){
   document.querySelectorAll('.pg').forEach(p=>p.classList.remove('on'));
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('on'));
   document.getElementById(`pg-${name}`).classList.add('on');
-  const tabMap={'form':0,'history':1,'store':2,'catalog':3};
+  const tabMap={'form':0,'steel':1,'history':2,'store':3,'catalog':4};
   const tabIdx = tabMap[name] ?? 0;
   document.querySelectorAll('.tab')[tabIdx]?.classList.add('on');
   if(name==='history'){renderHistory();loadFromSheet();}
   if(name==='stock')renderStock();
   if(name==='store'){renderStoreStock();}
   if(name==='catalog')renderCatalog();
+  if(name==='steel')initSteelPage();
 }
 function toast(msg,type=''){
   const el=document.getElementById('toast');
@@ -2086,7 +2108,7 @@ function toast(msg,type=''){
   setTimeout(()=>el.classList.remove('show'),2500);
 }
 
-const GAS_URL='https://script.google.com/macros/s/AKfycbzwygW7YfB71pXuRZ8gw2umHzQV2cJuqvccPejLZjP27e3ol6SurAnO-V23pYe2_qt-/exec';
+const GAS_URL='https://script.google.com/macros/s/AKfycbzpPPIxcYYNK18edi0sdj1Zf9uV_RVr4NrnVrDfGLQfq8l-LPUYI3I3Bnth5u9hjhropQ/exec';
 
 // ── SYNC QUEUE — เก็บ request ที่ยังไม่ได้ส่ง แล้ว retry อัตโนมัติ ─────────────
 let syncQueue = JSON.parse(localStorage.getItem('lbb_sync_queue')||'[]');
@@ -2197,7 +2219,8 @@ function loadFromSheet(){
           if(sd_date){
             const d=new Date(sd_date);
             if(!isNaN(d.getTime())){
-              return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+              // ใช้ UTC เพื่อป้องกัน timezone เพี้ยน
+              return d.getUTCFullYear()+'-'+String(d.getUTCMonth()+1).padStart(2,'0')+'-'+String(d.getUTCDate()).padStart(2,'0');
             }
           }
           return ld||sd_date||'';
@@ -2789,6 +2812,838 @@ function doMergeCatalog(){
   renderHistory();renderStock();renderStoreStock();
   toast(`แก้ไขแล้ว ${changed} รายการ ✓`,'ok');
 }
+
+// ── STEEL BINDING FORM ────────────────────────────────────────────────────────
+const STEEL_WEIGHT = {
+  6:0.222, 9:0.499, 12:0.888, 16:1.578, 20:2.466, 25:3.853, 28:4.834, 32:6.313
+};
+let steelRows = [];
+
+function initSteelPage(){
+  if(!steelRows.length || steelRows.every(r=>!r.size&&!r.len)){
+    steelRows = Array.from({length:13},(_,i)=>({id:i+1,size:'',sizeType:'DB',sizeNum:'',len:'',count:'',brand:'',wpc:'',wpl:'',bundled:'',total:'',totalW:''}));
+  }
+  // โหลด dropdown โครงการ
+  const sel=document.getElementById('st-proj');
+  if(sel){
+    const cur=sel.value;
+    sel.innerHTML='<option value="">— เลือกโครงการ —</option>'+allProj().map(p=>`<option value="${p}">${p}</option>`).join('');
+    if(cur) sel.value=cur;
+  }
+  if(!document.getElementById('st-date').value)
+    document.getElementById('st-date').value = localDateStr();
+  renderSteelRows();
+  renderConcreteRows();
+  renderSteelHistory();
+}
+// openSteelForm alias
+function openSteelForm(){ goPage('steel'); }
+function closeSteelForm(){ goPage('form'); }
+function updateSteelSize(idx){
+  const r=steelRows[idx];
+  if(!r)return;
+  const type=r.sizeType||'DB';
+  const num=r.sizeNum||'';
+  r.size = num ? type+num : '';
+}
+
+function renderSteelRows(){
+  const tbody = document.getElementById('st-rows');
+  tbody.innerHTML = steelRows.map(r=>`
+    <tr>
+      <td style="text-align:center;font-size:11px;color:var(--t3);padding:3px">${r.id}</td>
+      <td style="padding:2px">
+        <div style="display:flex;gap:2px">
+          <select style="padding:4px 2px;font-size:11px;border:1px solid var(--border);border-radius:6px;background:var(--s2);color:var(--t1);width:46px" onchange="steelRows[${r.id-1}].sizeType=this.value;updateSteelSize(${r.id-1});calcSteel()">
+            <option value="DB" ${(r.sizeType||'DB')==='DB'?'selected':''}>DB</option>
+            <option value="RB" ${r.sizeType==='RB'?'selected':''}>RB</option>
+
+          </select>
+          <input class="fi" style="padding:4px 4px;font-size:12px;width:38px;text-align:center" type="number" placeholder="16" value="${r.sizeNum||''}" oninput="steelRows[${r.id-1}].sizeNum=this.value;updateSteelSize(${r.id-1});calcSteel()">
+        </div>
+      </td>
+      <td style="padding:2px"><input class="fi" style="padding:4px 6px;font-size:12px;text-align:center" type="number" placeholder="0" value="${r.len}" oninput="steelRows[${r.id-1}].len=this.value;calcSteel()"></td>
+      <td style="padding:2px"><input class="fi" style="padding:4px 6px;font-size:12px;text-align:center" type="number" placeholder="0" value="${r.count}" oninput="steelRows[${r.id-1}].count=this.value;calcSteel()"></td>
+      <td style="padding:2px"><input class="fi" style="padding:4px 6px;font-size:12px" placeholder="ยี่ห้อ" value="${r.brand}" oninput="steelRows[${r.id-1}].brand=this.value"></td>
+      <td style="text-align:center;font-size:12px;padding:3px;color:var(--t1)" id="st-wpc-${r.id}">${r.wpc||'-'}</td>
+      <td style="text-align:center;font-size:12px;padding:3px;color:var(--t1)" id="st-wpl-${r.id}">${r.wpl||'-'}</td>
+      <td style="padding:2px"><input class="fi" style="padding:4px 6px;font-size:12px;text-align:center" type="number" placeholder="0" value="${r.bundled}" oninput="steelRows[${r.id-1}].bundled=this.value;calcSteel()"></td>
+      <td style="text-align:center;font-size:12px;padding:3px;color:var(--blue)" id="st-tot-${r.id}">${r.total||'-'}</td>
+      <td style="text-align:center;font-size:12px;font-weight:700;padding:3px;color:var(--in)" id="st-totw-${r.id}">${r.totalW||'-'}</td>
+    </tr>`).join('');
+}
+function calcSteel(){
+  let grandW = 0;
+  const priceKg = parseFloat(document.getElementById('st-price-kg')?.value)||0;
+  const wageKg  = parseFloat(document.getElementById('st-wage-kg')?.value)||0;
+  steelRows.forEach(r=>{
+    const size  = parseFloat(r.sizeNum)||parseFloat((r.size||'').replace(/[^0-9.]/g,''))||0;
+    const len   = parseFloat(r.len)||0;
+    const count = parseFloat(r.count)||0;
+    const bundled = parseFloat(r.bundled)||0;
+    // น้ำหนักเหล็กต่อเมตร (kg/m) ตามตารางมาตรฐาน (RB และ DB)
+    const STEEL_KG_PER_M = {
+      6:0.222, 8:0.395, 9:0.499, 10:0.616, 12:0.888,
+      15:1.387, 16:1.578, 19:2.226, 20:2.466, 22:2.984,
+      25:3.853, 28:4.834, 32:6.313, 34:7.127, 36:7.990, 40:9.865
+    };
+    const kgPerM = size>0 ? (STEEL_KG_PER_M[size] || (size*size/162)) : 0;
+    const wpl   = kgPerM*len;                    // น้ำหนักต่อเส้น
+    const total  = bundled>0 ? count*bundled : 0; // เส้นทั้งหมด (เส้น/ต้น × ท่อนที่มัด)
+    const wpc   = kgPerM*len*count;              // น้ำหนักต่อชนิด (ต่อ count เส้น)
+    const totalW = kgPerM*len*total;             // รวมน้ำหนักเหล็กทั้งหมด
+    r.wpc = wpc>0 ? wpc.toFixed(3) : '';
+    r.wpl = wpl>0 ? wpl.toFixed(3) : '';
+    r.total  = total>0 ? total : '';
+    r.totalW = totalW>0 ? totalW.toFixed(3) : '';
+    grandW += totalW;
+    const setTxt=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v||'-';};
+    setTxt(`st-wpc-${r.id}`, r.wpc);
+    setTxt(`st-wpl-${r.id}`, r.wpl);
+    setTxt(`st-tot-${r.id}`, r.total);
+    setTxt(`st-totw-${r.id}`, r.totalW);
+  });
+  const tw = document.getElementById('st-total-weight');
+  if(tw) tw.textContent = grandW>0 ? grandW.toFixed(3)+' kg' : '-';
+  // summary
+  // คำนวณลวด
+  const wireQty   = parseFloat(document.getElementById('st-wire')?.value)||0;
+  const wirePrice = parseFloat(document.getElementById('st-wire-price')?.value)||0;
+  const wireTotal = wireQty*wirePrice;
+  const wtEl = document.getElementById('st-wire-total');
+  if(wtEl) wtEl.textContent = wireTotal>0 ? wireTotal.toLocaleString('th-TH',{minimumFractionDigits:2})+' บาท' : '-';
+
+  // คำนวณลูกปูน
+  const cTotal = typeof getConcreteTotal==='function' ? getConcreteTotal() : 0;
+  const ctEl = document.getElementById('st-c-total');
+  if(ctEl) ctEl.textContent = cTotal>0 ? cTotal.toLocaleString('th-TH',{minimumFractionDigits:2})+' บาท' : '-';
+
+  // สรุปรวม
+  const steelCost = priceKg>0 ? grandW*priceKg : 0;
+  const wageCost  = wageKg>0  ? grandW*wageKg  : 0;
+  const grandTotal = steelCost+wageCost+wireTotal+cTotal;
+  document.getElementById('st-sum-weight').textContent = grandW>0 ? grandW.toFixed(3)+' kg' : '-';
+  document.getElementById('st-sum-steel').textContent  = steelCost>0 ? steelCost.toLocaleString('th-TH',{minimumFractionDigits:2})+' บาท' : '-';
+  document.getElementById('st-sum-wage').textContent   = wageCost>0  ? wageCost.toLocaleString('th-TH',{minimumFractionDigits:2})+' บาท' : '-';
+  document.getElementById('st-sum-total').textContent  = grandTotal>0 ? grandTotal.toLocaleString('th-TH',{minimumFractionDigits:2})+' บาท' : '-';
+}
+
+function printSteelForm(){
+  const proj    = document.getElementById('st-proj').value.trim() || '-';
+  const dateVal = document.getElementById('st-date').value;
+  const dia     = document.getElementById('st-dia').value.trim() || '-';
+  const bundle  = document.getElementById('st-bundle').value.trim() || '-';
+  const wire    = document.getElementById('st-wire').value.trim() || '-';
+  const wirePrice = parseFloat(document.getElementById('st-wire-price')?.value)||0;
+  const note    = document.getElementById('st-note').value.trim();
+  const priceKg = parseFloat(document.getElementById('st-price-kg')?.value)||0;
+  const wageKg  = parseFloat(document.getElementById('st-wage-kg')?.value)||0;
+  const fmtD = s=>{if(!s)return'วัน/เดือน/ปี';const p=s.split('-');return p.length===3?`${p[2]}/${p[1]}/${parseInt(p[0])+543}`:s;};
+  const today=new Date();
+  const thToday=`${today.getDate()}/${today.getMonth()+1}/${today.getFullYear()+543}`;
+
+  let grandW=0;
+  const rowsHtml = steelRows.map((r,i)=>{
+    const w = parseFloat(r.totalW)||0;
+    grandW += w;
+    const priceTotal = priceKg&&w ? (w*priceKg).toFixed(2) : '';
+    const wageTotal  = wageKg&&w  ? (w*wageKg).toFixed(2)  : '';
+    const bg = i%2===0?'#fff':'#fafafa';
+    return `<tr style="background:${bg}">
+      <td style="border:1px solid #ccc;text-align:center;padding:3px 2px;font-size:9pt">${i+1}</td>
+      <td style="border:1px solid #ccc;text-align:center;padding:3px 4px;font-size:9pt">${r.size||''}</td>
+      <td style="border:1px solid #ccc;text-align:center;padding:3px 2px;font-size:9pt">${r.len||''}</td>
+      <td style="border:1px solid #ccc;text-align:center;padding:3px 2px;font-size:9pt">${r.count||''}</td>
+      <td style="border:1px solid #ccc;padding:3px 4px;font-size:9pt">${r.brand||''}</td>
+      <td style="border:1px solid #ccc;text-align:center;padding:3px 2px;font-size:9pt">${r.wpc||''}</td>
+      <td style="border:1px solid #ccc;text-align:center;padding:3px 2px;font-size:9pt">${r.wpl||''}</td>
+      <td style="border:1px solid #ccc;text-align:center;padding:3px 2px;font-size:9pt">${r.bundled||''}</td>
+      <td style="border:1px solid #ccc;text-align:center;padding:3px 2px;font-size:9pt">${r.total||''}</td>
+      <td style="border:1px solid #ccc;text-align:center;padding:3px 2px;font-size:9pt;font-weight:600">${r.totalW||''}</td>
+      <td style="border:1px solid #ccc;text-align:center;padding:3px 2px;font-size:9pt;color:#1B3A6B">${priceKg?priceTotal:''}</td>
+      <td style="border:1px solid #ccc;text-align:center;padding:3px 2px;font-size:9pt">${w&&priceKg?priceKg:''}</td>
+      <td style="border:1px solid #ccc;text-align:center;padding:3px 2px;font-size:9pt">${w&&wageKg?wageKg:''}</td>
+      <td style="border:1px solid #ccc;text-align:center;padding:3px 2px;font-size:9pt;color:#27ae60">${wageKg?wageTotal:''}</td>
+      <td style="border:1px solid #ccc;padding:3px 4px;font-size:9pt">${note&&i===0?note:''}</td>
+    </tr>`;
+  }).join('');
+
+  const concItems = typeof getConcreteForPDF==='function'?getConcreteForPDF():[];
+  const chkData  = typeof getConcreteCheckboxStr==='function'?getConcreteCheckboxStr():{};
+  const chk  = v => v?'☑':'☐';
+  const c5=chkData.c5,c75=chkData.c75,c75h=chkData.c75h,c20=chkData.c20;
+
+  const priceTotal = priceKg&&grandW ? (grandW*priceKg).toFixed(2) : '-';
+  const wageTotal  = wageKg&&grandW  ? (grandW*wageKg).toFixed(2)  : '-';
+
+  const h = `<!DOCTYPE html><html><head>
+<meta charset="UTF-8"><title>รายงานผูกมัดเหล็ก_${proj}_${dateVal}</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap');
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Sarabun',sans-serif;background:#fff;font-size:10pt}
+table{width:100%;border-collapse:collapse}
+@media print{@page{size:A4 landscape;margin:6mm}body{margin:0}button{display:none!important}}
+</style></head><body>
+<div style="text-align:center;padding:6px;background:#f5f5f5" class="no-print">
+  <button onclick="window.print()" style="background:#1B3A6B;color:#fff;border:none;padding:8px 24px;border-radius:8px;font-size:14px;cursor:pointer;font-family:Sarabun,sans-serif">🖨 พิมพ์ / บันทึก PDF</button>
+</div>
+<div style="padding:4mm 5mm">
+  <!-- หัว -->
+  <table style="margin-bottom:4px">
+    <tr>
+      <td style="text-align:center;padding-bottom:2px" colspan="3">
+        <div style="font-size:13pt;font-weight:700">บริษัท ลาดกระบังเข็มเจาะ จำกัด</div>
+        <div style="font-size:12pt;font-weight:700;text-decoration:underline">รายงานการผูกมัดเหล็กประจำวัน</div>
+      </td>
+    </tr>
+    <tr>
+      <td style="width:45%">โครงการ : <u style="min-width:200px;display:inline-block">${proj}</u></td>
+      <td style="width:30%">วัน/เดือน/ปี ที่ผูกมัด : <u>${fmtD(dateVal)}</u></td>
+      <td>ชื่อชุดมัด : <u style="min-width:80px;display:inline-block">${bundle}</u></td>
+    </tr>
+    <tr>
+      <td>ขนาดเหล็กเสาเข็ม / Dia. : <u style="min-width:80px;display:inline-block">${dia}</u></td>
+      <td colspan="2"></td>
+    </tr>
+  </table>
+  <!-- ตาราง -->
+  <table>
+    <thead>
+      <tr style="background:#1B3A6B;color:#fff;font-size:8pt;font-weight:700;text-align:center">
+        <th style="border:1px solid #135;padding:3px 2px;width:4%">ลำดับ</th>
+        <th style="border:1px solid #135;padding:3px;width:8%">ขนาดเหล็ก<br>(มิลลิเมตร)</th>
+        <th style="border:1px solid #135;padding:3px;width:6%">ความยาว<br>(เมตร)</th>
+        <th style="border:1px solid #135;padding:3px;width:6%">จำนวน<br>เส้น/ต้น</th>
+        <th style="border:1px solid #135;padding:3px;width:7%">ยี่ห้อ</th>
+        <th style="border:1px solid #135;padding:3px;width:8%">น้ำหนักเหล็ก<br>ต่อชนิด</th>
+        <th style="border:1px solid #135;padding:3px;width:8%">น้ำหนัก<br>ต่อเส้น</th>
+        <th style="border:1px solid #135;padding:3px;width:7%">จำนวน<br>ท่อนที่มัดได้</th>
+        <th style="border:1px solid #135;padding:3px;width:7%">จำนวนเหล็ก<br>เส้นทั้งหมด</th>
+        <th style="border:1px solid #135;padding:3px;width:8%">รวมน้ำหนัก<br>เหล็ก</th>
+        <th style="border:1px solid #135;padding:3px;width:8%">คิดเป็นเงิน<br>ค่าเหล็ก</th>
+        <th style="border:1px solid #135;padding:3px;width:6%">ราคาเหล็ก<br>ต่อกิโล</th>
+        <th style="border:1px solid #135;padding:3px;width:8%">ค่าแรงผูกมัด<br>ต่อกิโล</th>
+        <th style="border:1px solid #135;padding:3px;width:8%">คิดเป็นเงิน<br>ค่ามัด</th>
+        <th style="border:1px solid #135;padding:3px;width:5%">หมายเหตุ</th>
+      </tr>
+    </thead>
+    <tbody>${rowsHtml}</tbody>
+    <tfoot>
+      <tr style="background:#f0f4ff;font-weight:700;font-size:10pt">
+        <td colspan="9" style="border:1px solid #ccc;padding:4px 6px;text-align:right">รวม</td>
+        <td style="border:1px solid #ccc;text-align:center;padding:4px">${grandW>0?grandW.toFixed(2):''}</td>
+        <td style="border:1px solid #ccc;text-align:center;padding:4px;color:#1B3A6B">${priceTotal}</td>
+        <td style="border:1px solid #ccc"></td>
+        <td style="border:1px solid #ccc;text-align:center;padding:4px;color:#27ae60">${wageTotal}</td>
+        <td style="border:1px solid #ccc"></td>
+      </tr>
+    </tfoot>
+  </table>
+  <!-- ลวด/ลูกปูน 2 คอลัมน์ -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:6px;font-size:9.5pt">
+    <!-- ลวด -->
+    <div>
+      <table style="width:100%;border-collapse:collapse">
+        <tr style="background:#1B3A6B;color:#fff;font-size:9pt;font-weight:700;text-align:center">
+          <th style="border:1px solid #135;padding:4px 6px;text-align:left">ลวดผูกมัด</th>
+          <th style="border:1px solid #135;padding:4px;width:50px">จำนวน (ขด)</th>
+          <th style="border:1px solid #135;padding:4px;width:70px">ราคา/ขด (บาท)</th>
+          <th style="border:1px solid #135;padding:4px;width:70px">รวม (บาท)</th>
+        </tr>
+        <tr>
+          <td style="border:1px solid #ccc;padding:4px 6px">ลวดผูกมัด</td>
+          <td style="border:1px solid #ccc;padding:4px;text-align:center">${wire||'-'}</td>
+          <td style="border:1px solid #ccc;padding:4px;text-align:center">${wirePrice>0?wirePrice:'-'}</td>
+          <td style="border:1px solid #ccc;padding:4px;text-align:center;font-weight:600;color:#1B3A6B">${wirePrice&&wire?(parseFloat(wire)*wirePrice).toLocaleString('th-TH',{minimumFractionDigits:2}):'-'}</td>
+        </tr>
+      </table>
+    </div>
+    <!-- ลูกปูน -->
+    <div>
+      <table style="width:100%;border-collapse:collapse">
+        <tr style="background:#1B3A6B;color:#fff;font-size:9pt;font-weight:700;text-align:center">
+          <th style="border:1px solid #135;padding:4px 6px;text-align:left">ขนาดลูกปูน ${chk(c5)} 5ซม ${chk(c75)} 7.5ซม ${chk(c75h)} 7.5ซม(ครึ่ง) ${chk(c20)} 20ซม</th>
+          <th style="border:1px solid #135;padding:4px;width:45px">จำนวน</th>
+          <th style="border:1px solid #135;padding:4px;width:65px">ราคา/อัน</th>
+          <th style="border:1px solid #135;padding:4px;width:65px">รวม</th>
+        </tr>
+        ${concItems.length>0?concItems.map(r=>`<tr>
+          <td style="border:1px solid #ccc;padding:3px 6px">${r.size}</td>
+          <td style="border:1px solid #ccc;padding:3px;text-align:center">${r.qty}</td>
+          <td style="border:1px solid #ccc;padding:3px;text-align:center">${r.price>0?r.price:'-'}</td>
+          <td style="border:1px solid #ccc;padding:3px;text-align:center;font-weight:600;color:#b45309">${r.total>0?r.total.toLocaleString('th-TH',{minimumFractionDigits:2}):'-'}</td>
+        </tr>`).join(''):'<tr><td colspan="4" style="border:1px solid #ccc;padding:4px;text-align:center;color:#aaa">-</td></tr>'}
+      </table>
+    </div>
+  </div>
+  <!-- ลายเซ็น -->
+  <table style="margin-top:14px">
+    <tr>
+      <td style="width:33%;text-align:center;border-top:1px solid #000;padding-top:4px;font-size:10pt">
+        <div style="height:24px"></div>(........................................)<div style="font-weight:700">หัวหน้างาน</div>
+        <div style="font-size:9pt">(........./........./..........)</div>
+      </td>
+      <td style="width:33%;text-align:center;border-top:1px solid #000;padding-top:4px;font-size:10pt">
+        <div style="height:24px"></div>(........................................)<div style="font-weight:700">ผู้ตรวจสอบ</div>
+        <div style="font-size:9pt">(........./........./..........)</div>
+      </td>
+      <td style="width:33%;text-align:center;border-top:1px solid #000;padding-top:4px;font-size:10pt">
+        <div style="height:24px"></div>(........................................)<div style="font-weight:700">ผู้จัดการโครงการ</div>
+        <div style="font-size:9pt">(........./........./..........)</div>
+      </td>
+    </tr>
+  </table>
+  <div style="margin-top:6px;font-size:8.5pt;color:#888;text-align:right">FM-QC-ST-01 | พิมพ์จากระบบ LBB สโตร์ — ${thToday}</div>
+</div></body></html>`;
+
+  const w = window.open('','_blank');
+  if(w){ w.document.write(h); w.document.close(); }
+  else toast('อนุญาต popup เพื่อเปิด PDF','err');
+}
+
+// ── STEEL RECORDS ─────────────────────────────────────────────────────────────
+let steelRecords = JSON.parse(localStorage.getItem('lbb_steel')||'[]');
+
+function saveSteelRecord(){
+  const proj = document.getElementById('st-proj').value;
+  if(!proj){toast('กรุณาเลือกโครงการ','err');return;}
+  const dateRaw = document.getElementById('st-date').value;
+  if(!dateRaw){toast('กรุณาระบุวันที่','err');return;}
+
+  // แปลงวันที่เป็น พ.ศ. string dd/mm/YYYY(พ.ศ.)
+  const fmtThaiDate = s=>{if(!s)return'';const p=s.split('-');return p.length===3?`${p[2]}/${p[1]}/${parseInt(p[0])+543}`:s;};
+
+  const priceKg = parseFloat(document.getElementById('st-price-kg')?.value)||0;
+  const wageKg  = parseFloat(document.getElementById('st-wage-kg')?.value)||0;
+  const wireQty = parseFloat(document.getElementById('st-wire')?.value)||0;
+  const wirePrice= parseFloat(document.getElementById('st-wire-price')?.value)||0;
+  const concreteItems=typeof getConcreteForPDF==='function'?getConcreteForPDF():[];
+  const c5=concreteItems.filter(r=>r.size.includes('5')&&!r.size.includes('7')).reduce((s,r)=>s+r.qty,0);
+  const c75=concreteItems.filter(r=>r.size.includes('7.5')&&!r.size.toLowerCase().includes('ครึ่ง')).reduce((s,r)=>s+r.qty,0);
+  const c75h=concreteItems.filter(r=>r.size.toLowerCase().includes('ครึ่ง')).reduce((s,r)=>s+r.qty,0);
+  const c20=concreteItems.filter(r=>r.size.includes('20')).reduce((s,r)=>s+r.qty,0);
+  const cPrice=0;
+  const note = document.getElementById('st-note').value.trim();
+  const dia  = document.getElementById('st-dia').value.trim();
+  const bundle=document.getElementById('st-bundle').value.trim();
+
+  let grandW=0;
+  const items=steelRows.filter(r=>r.size&&r.len&&r.count).map(r=>{
+    grandW+=parseFloat(r.totalW)||0;
+    return{size:r.size,len:r.len,count:r.count,brand:r.brand,wpc:r.wpc,wpl:r.wpl,bundled:r.bundled,total:r.total,totalW:r.totalW};
+  });
+  if(!items.length){toast('กรุณากรอกข้อมูลเหล็กอย่างน้อย 1 แถว','err');return;}
+
+  const rec={
+    id: Date.now(),
+    proj, date: dateRaw, dateDisplay: fmtThaiDate(dateRaw),
+    dia, bundle, note,
+    priceKg, wageKg, wireQty, wirePrice, cPrice,
+    c5, c75, c75h, c20,
+    items, grandW: grandW.toFixed(2),
+    steelCost:(priceKg*grandW).toFixed(2),
+    wageCost:(wageKg*grandW).toFixed(2),
+    wireCost:(wireQty*wirePrice).toFixed(2),
+    cCost:((c5+c75+c75h+c20)*cPrice).toFixed(2),
+  };
+
+  steelRecords.unshift(rec);
+  localStorage.setItem('lbb_steel',JSON.stringify(steelRecords));
+
+  // ── สร้างใบนำออกอัตโนมัติ เพื่อตัดสต็อกเหล็ก ──────────────────────────────
+  // รวมเส้นต่อขนาด: ใช้ count × bundled (ถ้ามี) หรือ count
+  const steelOutItems = {};
+  items.forEach(it=>{
+    const sz = (it.size||'?').trim();
+    const lines = parseFloat(it.total)||parseFloat(it.count)||0; // เส้นทั้งหมด
+    const len   = parseFloat(it.len)||0;
+    const key   = sz + (len ? '|'+len+' เมตร' : '');
+    if(!steelOutItems[key]) steelOutItems[key]={size:sz,len:len,qty:0,brand:it.brand||''};
+    steelOutItems[key].qty += lines;
+  });
+
+  const outItemList = Object.values(steelOutItems).map(it=>({
+    รายการ: 'เหล็กเส้น',
+    ขนาด:   it.size,
+    รุ่น:    it.len ? it.len+' เมตร' : '',
+    ยี่ห้อ:  it.brand,
+    จำนวน:  String(it.qty),
+    หน่วย:  'เส้น',
+    หมายเหตุ: `ผูกมัด ${dia||''} ${bundle||''}`
+  }));
+
+  if(outItemList.length){
+    const outDocNo = 'STL-'+localDateStr().replace(/-/g,'').slice(2)+'-'+Date.now().toString().slice(-4);
+    const outDoc = {
+      id: Date.now()+1,
+      ประเภท: 'out',
+      เลขเอกสาร: outDocNo,
+      โครงการ: 'สโตร์กลาง',
+      วันที่: dateRaw,
+      ผู้ขออนุญาต: '',
+      ผู้นำของ: '',
+      ทะเบียนรถ: '',
+      ลายเซ็น: {},
+      รายการสินค้า: outItemList,
+      รูปถ่าย: [],
+      หมายเหตุ: `ตัดสต็อกจากผูกมัดเหล็ก โครงการ ${proj} ${fmtThaiDate(dateRaw)}`,
+      สถานะ: 'ออก',
+      แหล่งข้อมูล: 'ผูกมัดเหล็ก',
+      บันทึก: new Date().toISOString(),
+    };
+    docs.unshift(outDoc);
+    localStorage.setItem('lbk_docs', JSON.stringify(docs));
+
+    // sync ใบนำออก ขึ้น Sheet
+    const _out = Object.assign({},outDoc);
+    _out.รูปถ่าย=[];_out.จำนวนรูป=0;
+    _out.รายการสินค้า=JSON.stringify(outDoc.รายการสินค้า);
+    _out.ลายเซ็น=JSON.stringify({});
+    gasPost('addDoc', _out).catch(()=>{ queuePost('addDoc',_out); });
+  }
+
+  // sync รายงานผูกมัด ขึ้น Sheet
+  const payload={...rec, items:JSON.stringify(rec.items), concreteItems:JSON.stringify(rec.concreteItems||[])};
+  gasPost('addSteelRecord', payload).catch(()=>{
+    toast('บันทึกแล้ว (จะซิงค์เมื่อ online) ✓','ok');
+  });
+
+  toast(`บันทึกแล้ว ✓ สร้างใบนำออก ${outDocNo||''} ตัดสต็อกเหล็กแล้ว`,'ok');
+  renderHistory();
+  renderStock();
+  renderSteelHistory();
+}
+
+function clearSteelForm(){
+  steelRows=Array.from({length:13},(_,i)=>({id:i+1,size:'',len:'',count:'',brand:'',wpc:'',wpl:'',bundled:'',total:'',totalW:''}));
+  concreteRows=[];
+  concreteNextId=1;
+  renderConcreteRows();
+  ['st-date','st-dia','st-bundle','st-price-kg','st-wage-kg','st-wire','st-wire-price','st-note'].forEach(id=>{
+    const el=document.getElementById(id);if(el&&el.type!=='hidden')el.value='';
+  });
+  document.getElementById('st-date').value=localDateStr();
+  renderSteelRows();
+  calcSteel();
+}
+
+let steelHistFilter='all';
+function renderSteelHistory(){
+  const projs=[...new Set(steelRecords.map(r=>r.proj))].sort();
+  const pf=document.getElementById('st-hist-filter');
+  if(pf){
+    pf.innerHTML=`<button class="filter-btn${steelHistFilter==='all'?' on':''}" onclick="steelHistFilter='all';renderSteelHistory()">ทั้งหมด</button>`
+      +projs.map(p=>`<button class="filter-btn${steelHistFilter===p?' on':''}" onclick="steelHistFilter='${p.replace(/'/g,"\'")}';renderSteelHistory()">${p}</button>`).join('');
+  }
+  const filtered=steelHistFilter==='all'?steelRecords:steelRecords.filter(r=>r.proj===steelHistFilter);
+  const el=document.getElementById('st-hist-list');
+  if(!el)return;
+  if(!filtered.length){el.innerHTML=`<div style="text-align:center;padding:24px;color:var(--t3)">ยังไม่มีบันทึก</div>`;return;}
+  el.innerHTML=filtered.map(r=>{
+    const total=(parseFloat(r.steelCost)||0)+(parseFloat(r.wageCost)||0)+(parseFloat(r.wireCost)||0)+(parseFloat(r.cCost)||0);
+    return`<div style="border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start">
+        <div>
+          <span style="font-size:12px;font-weight:600;color:var(--t1)">${r.proj}</span>
+          <span style="font-size:11px;color:var(--t2);margin-left:8px">${fmtDate(r.date)}</span>
+          ${r.dia?`<span style="font-size:11px;color:var(--blue);background:var(--blue-bg);padding:1px 6px;border-radius:6px;margin-left:4px">${r.dia}</span>`:''}
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:14px;font-weight:700;color:#b45309">${parseFloat(r.grandW||0).toFixed(3)} kg</div>
+          ${total>0?`<div style="font-size:11px;color:var(--t2)">${total.toLocaleString('th-TH',{minimumFractionDigits:2})} บาท</div>`:''}
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-top:6px">
+        <div style="font-size:11px;color:var(--t3)">
+          เหล็ก ${r.items.length} รายการ
+          ${r.wireQty?` | ลวด ${r.wireQty} ขด`:''}
+          ${(r.concreteItems||[]).length>0?' | มีลูกปูน':''}
+        </div>
+        <div style="display:flex;gap:5px">
+          <button onclick="printSteelRecord(${r.id})" class="btn-sm primary" style="flex:0;padding:4px 10px;font-size:11px">🖨 PDF</button>
+          <button onclick="editSteelRecord(${r.id})" class="btn-sm" style="flex:0;padding:4px 10px;font-size:11px">✏️ แก้ไข</button>
+          <button onclick="deleteSteelRecord(${r.id})" style="background:none;border:1px solid var(--red);color:var(--red);border-radius:6px;padding:4px 8px;cursor:pointer;font-size:11px;flex-shrink:0">🗑</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function printSteelSummary(){
+  const filter = steelHistFilter;
+  const recs = filter==='all' ? steelRecords : steelRecords.filter(r=>r.proj===filter);
+  if(!recs.length){toast('ไม่มีข้อมูล','err');return;}
+
+  const today=new Date();
+  const thToday=`${today.getDate()}/${today.getMonth()+1}/${today.getFullYear()+543}`;
+  const titleProj = filter==='all'?'ทุกโครงการ':filter;
+
+  // สรุปตามโครงการ
+  const byProj={};
+  recs.forEach(r=>{
+    if(!byProj[r.proj]) byProj[r.proj]={proj:r.proj,recs:[],totalW:0,steelCost:0,wageCost:0,wireCost:0,cCost:0};
+    byProj[r.proj].recs.push(r);
+    byProj[r.proj].totalW    += parseFloat(r.grandW)||0;
+    byProj[r.proj].steelCost += parseFloat(r.steelCost)||0;
+    byProj[r.proj].wageCost  += parseFloat(r.wageCost)||0;
+    byProj[r.proj].wireCost  += parseFloat(r.wireCost)||0;
+    byProj[r.proj].cCost     += parseFloat(r.cCost)||0;
+  });
+
+  const fmt = n => n>0 ? n.toLocaleString('th-TH',{minimumFractionDigits:2}) : '-';
+
+  const projRows = Object.values(byProj).map((p,pi)=>{
+    const grandTotal = p.steelCost+p.wageCost+p.wireCost+p.cCost;
+    const detailRows = p.recs.map((r,i)=>{
+      const rt = (parseFloat(r.steelCost)||0)+(parseFloat(r.wageCost)||0)+(parseFloat(r.wireCost)||0)+(parseFloat(r.cCost)||0);
+      return`<tr style="background:${i%2===0?'#fff':'#fafafa'};font-size:9pt">
+        <td style="border:1px solid #ddd;padding:3px 6px">${r.dateDisplay||r.date}</td>
+        <td style="border:1px solid #ddd;padding:3px 6px">${r.dia||'-'}</td>
+        <td style="border:1px solid #ddd;padding:3px 6px">${r.bundle||'-'}</td>
+        <td style="border:1px solid #ddd;padding:3px 6px;text-align:center">${r.items.length}</td>
+        <td style="border:1px solid #ddd;padding:3px 6px;text-align:center;font-weight:600">${parseFloat(r.grandW).toFixed(2)}</td>
+        <td style="border:1px solid #ddd;padding:3px 6px;text-align:right;color:#1B3A6B">${fmt(parseFloat(r.steelCost))}</td>
+        <td style="border:1px solid #ddd;padding:3px 6px;text-align:right;color:#27ae60">${fmt(parseFloat(r.wageCost))}</td>
+        <td style="border:1px solid #ddd;padding:3px 6px;text-align:right">${r.wireQty||0} ขด</td>
+        <td style="border:1px solid #ddd;padding:3px 6px;text-align:right">${(parseFloat(r.c5)||0)+(parseFloat(r.c75)||0)+(parseFloat(r.c75h)||0)+(parseFloat(r.c20)||0)} อัน</td>
+        <td style="border:1px solid #ddd;padding:3px 6px;text-align:right;font-weight:700;color:#b45309">${rt>0?fmt(rt):'-'}</td>
+      </tr>`;
+    }).join('');
+    return`
+    <tr style="background:#1B3A6B;color:#fff;font-size:10pt;font-weight:700">
+      <td colspan="10" style="padding:6px 10px">📍 ${p.proj}</td>
+    </tr>
+    <tr style="background:#f0f0f0;font-size:9pt;font-weight:700;text-align:center">
+      <th style="border:1px solid #ccc;padding:4px">วันที่</th>
+      <th style="border:1px solid #ccc;padding:4px">ขนาด Dia.</th>
+      <th style="border:1px solid #ccc;padding:4px">ชุดมัด</th>
+      <th style="border:1px solid #ccc;padding:4px">รายการ</th>
+      <th style="border:1px solid #ccc;padding:4px">น.หนัก (kg)</th>
+      <th style="border:1px solid #ccc;padding:4px">ค่าเหล็ก</th>
+      <th style="border:1px solid #ccc;padding:4px">ค่าแรงมัด</th>
+      <th style="border:1px solid #ccc;padding:4px">ลวด</th>
+      <th style="border:1px solid #ccc;padding:4px">ลูกปูน</th>
+      <th style="border:1px solid #ccc;padding:4px">รวมเงิน</th>
+    </tr>
+    ${detailRows}
+    <tr style="background:#fffbf0;font-weight:700;font-size:10pt">
+      <td colspan="4" style="border:1px solid #ccc;padding:4px 8px;text-align:right">รวม ${p.proj}</td>
+      <td style="border:1px solid #ccc;padding:4px;text-align:center">${p.totalW.toFixed(2)}</td>
+      <td style="border:1px solid #ccc;padding:4px;text-align:right;color:#1B3A6B">${fmt(p.steelCost)}</td>
+      <td style="border:1px solid #ccc;padding:4px;text-align:right;color:#27ae60">${fmt(p.wageCost)}</td>
+      <td style="border:1px solid #ccc;padding:4px;text-align:right">-</td>
+      <td style="border:1px solid #ccc;padding:4px;text-align:right">-</td>
+      <td style="border:1px solid #ccc;padding:4px;text-align:right;color:#b45309">${fmt(grandTotal)}</td>
+    </tr>
+    <tr><td colspan="10" style="padding:8px;border:none"></td></tr>`;
+  }).join('');
+
+  const grandW   = Object.values(byProj).reduce((s,p)=>s+p.totalW,0);
+  const grandCost= Object.values(byProj).reduce((s,p)=>s+p.steelCost+p.wageCost+p.wireCost+p.cCost,0);
+
+  const h=`<!DOCTYPE html><html><head>
+<meta charset="UTF-8"><title>สรุปการใช้เหล็ก_${titleProj}</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap');
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Sarabun',sans-serif;font-size:10pt}
+table{width:100%;border-collapse:collapse}
+thead{display:table-header-group}
+@media print{@page{size:A4;margin:8mm}body{margin:0}button{display:none!important}}
+</style></head><body>
+<div style="text-align:center;padding:8px;background:#f5f5f5">
+  <button onclick="window.print()" style="background:#b45309;color:#fff;border:none;padding:8px 24px;border-radius:8px;font-size:14px;cursor:pointer;font-family:Sarabun,sans-serif">🖨 พิมพ์ / บันทึก PDF</button>
+</div>
+<div style="padding:6mm 8mm">
+  <table style="margin-bottom:10px">
+    <tr>
+      <td><div style="font-size:16pt;font-weight:700;color:#1B3A6B">รายงานสรุปการใช้เหล็ก</div>
+          <div style="font-size:11pt">โครงการ: <strong>${titleProj}</strong></div>
+          <div style="font-size:10pt;color:#555">วันที่พิมพ์: ${thToday}</div></td>
+      <td style="text-align:right;vertical-align:top">
+        <div style="font-weight:700">บริษัท ลาดกระบัง เข็มเจาะ จำกัด</div>
+        <div style="font-size:10pt;color:#b45309;font-weight:700">น้ำหนักเหล็กรวม: ${grandW.toFixed(2)} kg</div>
+        <div style="font-size:10pt;color:#1B3A6B;font-weight:700">ค่าใช้จ่ายรวม: ${fmt(grandCost)} บาท</div>
+      </td>
+    </tr>
+  </table>
+  <table>${projRows}</table>
+  <div style="margin-top:10px;font-size:9pt;color:#888;text-align:right">พิมพ์จากระบบ LBB สโตร์ — ${thToday}</div>
+</div></body></html>`;
+
+  const w=window.open('','_blank');
+  if(w){w.document.write(h);w.document.close();}
+  else toast('อนุญาต popup เพื่อเปิด PDF','err');
+}
+
+// ── STEEL STOCK ───────────────────────────────────────────────────────────────
+// สต็อกเหล็ก: คำนวณจาก steelRecords (รับเข้า) + เอกสารนำออก (ชื่อ "เหล็กเส้น")
+// key = ขนาด (size) เช่น "DB16", "RB9"
+let steelStockProjFilter = 'all';
+
+function buildSteelStockMap(){
+  // รับเข้า (kg) จาก steelRecords แยกตามขนาด
+  const buyMap={}; // size → kg
+  steelRecords.forEach(rec=>{
+    (rec.items||[]).forEach(it=>{
+      const sz=((it.size||'?').trim()||'?').toUpperCase().replace(/\s+/g,'');
+      if(sz==='?'||!it.totalW)return;
+      buyMap[sz]=(buyMap[sz]||0)+(parseFloat(it.totalW)||0);
+    });
+  });
+
+  // นำออก (เส้น/kg) จาก docs เหล็กเส้น
+  const outMap={}; // size → {เส้น, kg, projs}
+  docs.forEach(doc=>{
+    if(doc.ประเภท!=='out') return;
+    (doc.รายการสินค้า||[]).forEach(it=>{
+      const name=(it.รายการ||'').toLowerCase();
+      if(!name.includes('เหล็ก')) return;
+      const sz=(it.ขนาด||it.รุ่น||'?').trim().toUpperCase().replace(/\s+/g,'');
+      const qty=parseFloat(it.จำนวน)||0;
+      const unit=it.หน่วย||'เส้น';
+      if(!outMap[sz]) outMap[sz]={qty:0,unit,projs:new Set()};
+      outMap[sz].qty+=qty;
+      outMap[sz].projs.add(doc.โครงการ||'');
+    });
+  });
+
+  // รวม
+  const allSizes=new Set([...Object.keys(buyMap),...Object.keys(outMap)]);
+  return [...allSizes].map(sz=>({
+    size:sz,
+    buyKg: parseFloat((buyMap[sz]||0).toFixed(3)),
+    outQty: parseFloat((outMap[sz]?.qty||0).toFixed(3)),
+    outUnit: outMap[sz]?.unit||'เส้น',
+    projs: outMap[sz]?.projs ? [...outMap[sz].projs].filter(Boolean).join(', ') : '',
+  })).sort((a,b)=>a.size.localeCompare(b.size,'th'));
+}
+
+function renderSteelStock(){
+  const rows = buildSteelStockMap();
+  const q = (document.getElementById('steel-stock-search')?.value||'').toLowerCase();
+  const projs = [...new Set(rows.map(r=>r.proj))].sort();
+
+  const pf = document.getElementById('steel-stock-proj-filter');
+  if(pf){
+    pf.innerHTML=`<button class="filter-btn${steelStockProjFilter==='all'?' on':''}" onclick="steelStockProjFilter='all';renderSteelStock()">ทั้งหมด</button>`
+      +projs.map(p=>`<button class="filter-btn${steelStockProjFilter===p?' on':''}" onclick="steelStockProjFilter='${p.replace(/'/g,"\'")}';renderSteelStock()">${p}</button>`).join('');
+  }
+
+  let filtered = rows;
+  if(steelStockProjFilter!=='all') filtered=rows.filter(r=>r.proj===steelStockProjFilter);
+  if(q) filtered=filtered.filter(r=>r.size.toLowerCase().includes(q)||r.proj.toLowerCase().includes(q));
+
+  const el=document.getElementById('steel-stock-list');
+  if(!el)return;
+  if(!filtered.length){
+    el.innerHTML=`<div style="text-align:center;padding:32px;color:var(--t3)">ไม่มีข้อมูลสต็อกเหล็ก<br><small>บันทึกผูกมัดเหล็กก่อนเพื่อดูยอด</small></div>`;
+    return;
+  }
+
+  // แยกกลุ่มตามโครงการ
+  const groups={};
+  filtered.forEach(r=>{if(!groups[r.proj])groups[r.proj]=[];groups[r.proj].push(r);});
+
+  el.innerHTML=Object.entries(groups).map(([proj,items])=>`
+    <div style="margin-bottom:14px">
+      <div style="font-size:12px;font-weight:600;color:#b45309;padding:6px 0 4px;border-bottom:1px solid var(--border);margin-bottom:4px">🔩 ${proj}</div>
+      ${items.map(r=>{
+        const c=r.net>0?'#b45309':r.net<0?'var(--red)':'var(--t3)';
+        return`<div style="display:flex;align-items:center;padding:8px 0;border-bottom:1px dashed var(--border);gap:8px">
+          <div style="flex:1">
+            <div style="font-size:14px;font-weight:600;color:var(--t1)">${r.size}</div>
+            <div style="font-size:11px;color:var(--t3);margin-top:2px">รับเข้า ${r.buy.toFixed(3)} kg | ออก ${r.out.toFixed(3)} kg</div>
+          </div>
+          <div style="text-align:right;flex-shrink:0">
+            <div style="font-size:18px;font-weight:700;font-family:var(--mono);color:${c}">${r.net.toFixed(3)}</div>
+            <div style="font-size:10px;color:var(--t3)">kg คงเหลือ</div>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>`).join('');
+}
+
+// ── CONCRETE (ลูกปูน) ─────────────────────────────────────────────────────────
+let concreteRows = [];
+let concreteNextId = 1;
+
+function addConcreteRow(){
+  concreteRows.push({id:concreteNextId++, size:'', qty:'', price:'', checked:false});
+  renderConcreteRows();
+}
+function removeConcreteRow(id){
+  concreteRows=concreteRows.filter(r=>r.id!==id);
+  renderConcreteRows();
+  calcSteel();
+}
+function renderConcreteRows(){
+  const tbody=document.getElementById('concrete-rows');
+  if(!tbody)return;
+  tbody.innerHTML=concreteRows.map(r=>`
+    <tr>
+      <td style="padding:2px"><input class="fi" style="padding:4px 6px;font-size:12px" placeholder="เช่น 5 ซม., 7.5 ซม." value="${r.size}" oninput="concreteRows.find(x=>x.id===${r.id}).size=this.value"></td>
+      <td style="padding:2px"><input class="fi" type="number" style="padding:4px 6px;font-size:12px;text-align:center" placeholder="0" value="${r.qty}" oninput="concreteRows.find(x=>x.id===${r.id}).qty=this.value;calcSteel()"></td>
+      <td style="padding:2px"><input class="fi" type="number" style="padding:4px 6px;font-size:12px;text-align:center" placeholder="0" value="${r.price}" oninput="concreteRows.find(x=>x.id===${r.id}).price=this.value;calcSteel()"></td>
+      <td style="text-align:center;font-size:12px;color:#b45309;font-weight:600" id="cr-total-${r.id}">-</td>
+      <td style="text-align:center;padding:2px"><button onclick="removeConcreteRow(${r.id})" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:14px">✕</button></td>
+    </tr>`).join('');
+  calcSteel();
+}
+
+function getConcreteTotal(){
+  let total=0;
+  concreteRows.forEach(r=>{
+    const q=parseFloat(r.qty)||0;
+    const p=parseFloat(r.price)||0;
+    const t=q*p;
+    total+=t;
+    const el=document.getElementById(`cr-total-${r.id}`);
+    if(el)el.textContent=t>0?t.toLocaleString('th-TH',{minimumFractionDigits:2}):'-';
+  });
+  return total;
+}
+
+function getConcreteForPDF(){
+  // สำหรับแสดงใน PDF และบันทึก
+  const checked=concreteRows.filter(r=>parseFloat(r.qty)>0);
+  return checked.map(r=>({
+    size:r.size,
+    qty:parseFloat(r.qty)||0,
+    price:parseFloat(r.price)||0,
+    total:(parseFloat(r.qty)||0)*(parseFloat(r.price)||0)
+  }));
+}
+
+function getConcreteCheckboxStr(){
+  // ดูจาก default rows ที่ id 1-4 ตรงกับขนาดมาตรฐาน
+  const active=concreteRows.filter(r=>parseFloat(r.qty)>0).map(r=>(r.size||'').trim());
+  const match=(size,patterns)=>patterns.some(p=>size===p||size.startsWith(p+' ')||size.startsWith(p+'ซ'));
+  const c5  = active.some(s=>match(s,['5 ซม.','5ซม.','5 ซม','5ซม']));
+  const c75  = active.some(s=>match(s,['7.5 ซม.','7.5ซม.','7.5 ซม','7.5ซม'])&&!s.includes('ครึ่ง'));
+  const c75h = active.some(s=>s.includes('ครึ่ง'));
+  const c20  = active.some(s=>match(s,['20 ซม.','20ซม.','20 ซม','20ซม']));
+  return{c5,c75,c75h,c20};
+}
+
+function deleteSteelRecord(id){
+  if(!confirm('ลบบันทึกนี้? (ข้อมูลจะหายจากเครื่องนี้)'))return;
+  steelRecords=steelRecords.filter(r=>r.id!==id);
+  localStorage.setItem('lbb_steel',JSON.stringify(steelRecords));
+  renderSteelHistory();
+  toast('ลบแล้ว','ok');
+}
+
+function loadSteelFromSheet(){
+  gasGet('getSteelRecords').then(data=>{
+    if(!data||!data.ok||!data.records) return;
+    // merge กับ local — ใช้ id เป็น key
+    const localMap={};
+    steelRecords.forEach(r=>{localMap[String(r.id)]=r;});
+    data.records.forEach(sd=>{
+      if(!localMap[String(sd.id)]){
+        // แปลง items string → array
+        if(typeof sd.items==='string'){try{sd.items=JSON.parse(sd.items);}catch(e){sd.items=[];}}
+        steelRecords.push(sd);
+      }
+    });
+    steelRecords.sort((a,b)=>b.id-a.id);
+    localStorage.setItem('lbb_steel',JSON.stringify(steelRecords));
+    if(document.getElementById('pg-steel')?.classList.contains('on')) renderSteelHistory();
+  }).catch(e=>console.warn('loadSteelFromSheet:',e));
+}
+
+function printSteelRecord(id){
+  const rec = steelRecords.find(r=>String(r.id)===String(id));
+  if(!rec){toast('ไม่พบข้อมูล','err');return;}
+  // โหลดข้อมูลจาก rec เข้า steelRows และ fields แล้วเปิด PDF
+  steelRows = Array.from({length:13},(_,i)=>({id:i+1,size:'',sizeType:'DB',sizeNum:'',len:'',count:'',brand:'',wpc:'',wpl:'',bundled:'',total:'',totalW:''}));
+  (rec.items||[]).forEach((it,i)=>{
+    if(i>=13)return;
+    const sizeNum = (it.size||'').replace(/[^0-9.]/g,'');
+    const sizeType= (it.size||'').replace(/[0-9.]/g,'').trim()||'DB';
+    steelRows[i]={id:i+1,size:it.size||'',sizeType,sizeNum,len:it.len||'',count:it.count||'',brand:it.brand||'',
+      wpc:it.wpc||'',wpl:it.wpl||'',bundled:it.bundled||'',total:it.total||'',totalW:it.totalW||''};
+  });
+  concreteRows = (rec.concreteItems||[]).map((c,i)=>({id:i+1,size:c.size||'',qty:String(c.qty||''),price:String(c.price||''),checked:false}));
+  concreteNextId = concreteRows.length+1;
+  // set form values สำหรับ print
+  const tmpProj=document.getElementById('st-proj').value;
+  const tmpDate=document.getElementById('st-date').value;
+  document.getElementById('st-proj').value=rec.proj||'';
+  document.getElementById('st-date').value=rec.date||'';
+  document.getElementById('st-dia').value=rec.dia||'';
+  document.getElementById('st-bundle').value=rec.bundle||'';
+  document.getElementById('st-price-kg').value=rec.priceKg||'';
+  document.getElementById('st-wage-kg').value=rec.wageKg||'';
+  document.getElementById('st-wire').value=rec.wireQty||'';
+  document.getElementById('st-wire-price').value=rec.wirePrice||'';
+  document.getElementById('st-note').value=rec.note||'';
+  calcSteel();
+  printSteelForm();
+  // restore
+  setTimeout(()=>{
+    document.getElementById('st-proj').value=tmpProj;
+    document.getElementById('st-date').value=tmpDate;
+  },500);
+}
+
+function editSteelRecord(id){
+  const rec = steelRecords.find(r=>String(r.id)===String(id));
+  if(!rec){toast('ไม่พบข้อมูล','err');return;}
+  // โหลดข้อมูลเข้าฟอร์ม
+  steelRows = Array.from({length:13},(_,i)=>({id:i+1,size:'',sizeType:'DB',sizeNum:'',len:'',count:'',brand:'',wpc:'',wpl:'',bundled:'',total:'',totalW:''}));
+  (rec.items||[]).forEach((it,i)=>{
+    if(i>=13)return;
+    const sizeNum = (it.size||'').replace(/[^0-9.]/g,'');
+    const sizeType= (it.size||'DB').replace(/[0-9.]/g,'').trim()||'DB';
+    steelRows[i]={id:i+1,size:it.size||'',sizeType,sizeNum,len:it.len||'',count:it.count||'',brand:it.brand||'',
+      wpc:it.wpc||'',wpl:it.wpl||'',bundled:it.bundled||'',total:it.total||'',totalW:it.totalW||''};
+  });
+  concreteRows = (rec.concreteItems||[]).map((c,i)=>({id:i+1,size:c.size||'',qty:String(c.qty||''),price:String(c.price||''),checked:false}));
+  concreteNextId = concreteRows.length+1;
+  // set form
+  const sel=document.getElementById('st-proj');
+  if(sel) sel.value=rec.proj||'';
+  document.getElementById('st-date').value=rec.date||'';
+  document.getElementById('st-dia').value=rec.dia||'';
+  document.getElementById('st-bundle').value=rec.bundle||'';
+  document.getElementById('st-price-kg').value=rec.priceKg||'';
+  document.getElementById('st-wage-kg').value=rec.wageKg||'';
+  document.getElementById('st-wire').value=rec.wireQty||'';
+  document.getElementById('st-wire-price').value=rec.wirePrice||'';
+  document.getElementById('st-note').value=rec.note||'';
+  // ลบ record เดิม เพื่อ save ใหม่
+  steelRecords = steelRecords.filter(r=>String(r.id)!==String(id));
+  localStorage.setItem('lbb_steel',JSON.stringify(steelRecords));
+  renderSteelRows();
+  renderConcreteRows();
+  calcSteel();
+  // ไปหน้าเหล็กก่อน แล้วค่อย set ข้อมูล (เพราะ initSteelPage จะ reset)
+  goPage('steel');
+  // set ข้อมูลหลัง goPage เพื่อไม่ให้ถูก reset
+  setTimeout(()=>{
+    const selP=document.getElementById('st-proj');
+    if(selP){ 
+      // โหลด dropdown โครงการก่อน
+      selP.innerHTML='<option value="">— เลือกโครงการ —</option>'+allProj().map(p=>`<option value="${p}">${p}</option>`).join('');
+      selP.value=rec.proj||'';
+    }
+    document.getElementById('st-date').value=rec.date||'';
+    document.getElementById('st-dia').value=rec.dia||'';
+    document.getElementById('st-bundle').value=rec.bundle||'';
+    document.getElementById('st-price-kg').value=rec.priceKg||'';
+    document.getElementById('st-wage-kg').value=rec.wageKg||'';
+    document.getElementById('st-wire').value=rec.wireQty||'';
+    document.getElementById('st-wire-price').value=rec.wirePrice||'';
+    document.getElementById('st-note').value=rec.note||'';
+    renderSteelRows();
+    renderConcreteRows();
+    calcSteel();
+    toast('โหลดข้อมูลแล้ว — แก้ไขแล้วกด 💾 บันทึก','ok');
+  }, 100);
+}
 </script>
 
 <!-- EDIT MODAL -->
@@ -2927,5 +3782,162 @@ function doMergeCatalog(){
   </div>
 </div>
 
+
+<!-- STEEL BINDING MODAL -->
+<div id="pg-steel" class="pg no-print">
+  <div style="max-width:700px;margin:0 auto;padding-bottom:20px">
+    <div class="modal-hd" style="padding:14px 16px">
+      <div>
+        <div class="modal-title">🔩 รายงานการผูกมัดเหล็กประจำวัน</div>
+        <div style="font-size:12px;color:var(--t2);margin-top:2px">FM-QC-ST-01</div>
+      </div>
+
+    </div>
+    <div style="padding:0 16px 16px;overflow-y:auto;max-height:80vh">
+      <!-- Header Info -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
+        <div class="f" style="padding:0">
+          <div class="fl">โครงการ <span class="req">*</span></div>
+          <select class="fs" id="st-proj"><option value="">— เลือกโครงการ —</option></select>
+        </div>
+        <div class="f" style="padding:0">
+          <div class="fl">วัน/เดือน/ปี ที่ผูกมัด</div>
+          <input class="fi" type="date" id="st-date">
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
+        <div class="f" style="padding:0">
+          <div class="fl">ขนาดเหล็กเสาเข็ม / Dia.</div>
+          <input class="fi" id="st-dia" placeholder="เช่น 600mm">
+        </div>
+        <div class="f" style="padding:0">
+          <div class="fl">ชื่อชุดมัด</div>
+          <input class="fi" id="st-bundle" placeholder="เช่น ชุด A">
+        </div>
+      </div>
+      <!-- ราคา/ค่าแรง -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
+        <div class="f" style="padding:0">
+          <div class="fl">ราคาเหล็กต่อกิโล (บาท)</div>
+          <input class="fi" type="number" id="st-price-kg" placeholder="0" oninput="calcSteel()">
+        </div>
+        <div class="f" style="padding:0">
+          <div class="fl">ค่าแรงมัดต่อกิโล (บาท)</div>
+          <input class="fi" type="number" id="st-wage-kg" placeholder="0" oninput="calcSteel()">
+        </div>
+      </div>
+
+      <!-- ตารางรายการ -->
+      <div style="font-size:12px;font-weight:600;color:var(--t2);margin-bottom:6px">รายการเหล็ก (สูงสุด 13 รายการ)</div>
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:12px">
+          <thead>
+            <tr style="background:var(--s2);font-size:11px;color:var(--t2)">
+              <th style="padding:5px 3px;text-align:center;width:28px">#</th>
+              <th style="padding:5px 4px;text-align:left;min-width:95px">ขนาด</th>
+              <th style="padding:5px 4px;text-align:center;width:55px">ยาว (ม.)</th>
+              <th style="padding:5px 4px;text-align:center;width:50px">เส้น/ต้น</th>
+              <th style="padding:5px 4px;text-align:left;min-width:60px">ยี่ห้อ</th>
+              <th style="padding:5px 4px;text-align:center;width:60px">น.หนัก/ชนิด</th>
+              <th style="padding:5px 4px;text-align:center;width:60px">น.หนัก/เส้น</th>
+              <th style="padding:5px 4px;text-align:center;width:50px">ท่อน/มัด</th>
+              <th style="padding:5px 4px;text-align:center;width:50px">เส้นรวม</th>
+              <th style="padding:5px 4px;text-align:center;width:65px">น.หนักรวม</th>
+            </tr>
+          </thead>
+          <tbody id="st-rows"></tbody>
+          <tfoot>
+            <tr style="background:var(--s2);font-weight:700;font-size:12px">
+              <td colspan="9" style="padding:5px 6px;text-align:right;color:var(--t2)">รวมทั้งหมด</td>
+              <td style="padding:5px 4px;text-align:center" id="st-total-weight">-</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+
+      <!-- ลวด/ลูกปูน -->
+      <div style="background:var(--s2);border-radius:8px;padding:10px 12px;margin:12px 0">
+        <div style="font-size:12px;font-weight:600;color:var(--t2);margin-bottom:8px">🪢 ลวดและลูกปูน</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px">
+          <div class="f" style="padding:0">
+            <div class="fl">จำนวนลวด (ขด)</div>
+            <input class="fi" type="number" id="st-wire" placeholder="0" oninput="calcSteel()">
+          </div>
+          <div class="f" style="padding:0">
+            <div class="fl">ราคาลวดต่อขด (บาท)</div>
+            <input class="fi" type="number" id="st-wire-price" placeholder="0" oninput="calcSteel()">
+          </div>
+          <div class="f" style="padding:0">
+            <div class="fl" id="st-wire-total-lbl" style="color:var(--t2)">ค่าลวดรวม</div>
+            <div class="fi" id="st-wire-total" style="background:var(--s3);color:var(--t1);font-weight:600">-</div>
+          </div>
+        </div>
+        <div style="margin-bottom:8px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+            <div class="fl">จำนวนลูกปูน</div>
+            <button class="btn-sm" style="flex:0;padding:4px 10px;font-size:11px" onclick="addConcreteRow()">＋ เพิ่ม</button>
+          </div>
+          <div style="overflow-x:auto">
+            <table style="width:100%;border-collapse:collapse;font-size:12px;margin-bottom:4px">
+              <thead>
+                <tr style="background:var(--s2);font-size:11px;color:var(--t2)">
+                  <th style="padding:4px 6px;text-align:left">ขนาด</th>
+                  <th style="padding:4px 6px;text-align:center;width:60px">จำนวน (อัน)</th>
+                  <th style="padding:4px 6px;text-align:center;width:80px">ราคา/อัน (บาท)</th>
+                  <th style="padding:4px 6px;text-align:center;width:70px">รวม (บาท)</th>
+                  <th style="padding:4px 6px;text-align:center;width:30px"></th>
+                </tr>
+              </thead>
+              <tbody id="concrete-rows"></tbody>
+              <tfoot>
+                <tr style="background:var(--s2);font-weight:700">
+                  <td colspan="3" style="padding:4px 6px;text-align:right;font-size:11px;color:var(--t2)">ค่าลูกปูนรวม</td>
+                  <td style="padding:4px 6px;text-align:center;color:#b45309" id="st-c-total">-</td>
+                  <td></td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+        <input type="hidden" id="st-c5" value="0">
+        <input type="hidden" id="st-c75" value="0">
+        <input type="hidden" id="st-c75h" value="0">
+        <input type="hidden" id="st-c20" value="0">
+        <input type="hidden" id="st-c-price" value="0">
+        <div class="f" style="padding:0">
+          <div class="fl">หมายเหตุ</div>
+          <input class="fi" id="st-note" placeholder="หมายเหตุเพิ่มเติม">
+        </div>
+      </div>
+
+      <!-- สรุปค่าใช้จ่าย -->
+      <div id="st-summary" style="background:var(--blue-bg);border:1px solid rgba(68,147,248,.3);border-radius:8px;padding:10px 12px;margin-bottom:12px">
+        <div style="font-size:12px;font-weight:600;color:var(--blue);margin-bottom:6px">💰 สรุปค่าใช้จ่ายทั้งหมด</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;font-size:12px">
+          <div><div style="color:var(--t2)">น้ำหนักเหล็กรวม</div><div style="font-weight:700" id="st-sum-weight">-</div></div>
+          <div><div style="color:var(--t2)">ค่าเหล็กรวม</div><div style="font-weight:700;color:var(--out)" id="st-sum-steel">-</div></div>
+          <div><div style="color:var(--t2)">ค่าแรงมัดรวม</div><div style="font-weight:700;color:var(--in)" id="st-sum-wage">-</div></div>
+          <div><div style="color:var(--t2)">รวมทั้งสิ้น</div><div style="font-weight:700;color:var(--blue);font-size:14px" id="st-sum-total">-</div></div>
+        </div>
+      </div>
+
+      <div class="btn-row" style="padding:0">
+        <button class="btn" style="background:#b45309;color:#fff;border:none" onclick="saveSteelRecord()">💾 บันทึก</button>
+        <button class="btn" style="background:#b45309;color:#fff;border:none;opacity:0.85" onclick="printSteelForm()">🖨 PDF ฟอร์มนี้</button>
+        <button class="btn btn-ghost" onclick="clearSteelForm()">ล้าง</button>
+      </div>
+
+      <!-- ประวัติผูกมัดตามโครงการ -->
+      <div style="margin-top:16px;border-top:1px solid var(--border);padding-top:12px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <div style="font-size:14px;font-weight:700">📋 ประวัติการผูกมัดเหล็ก</div>
+          <button class="btn-sm" style="flex:0;padding:8px 14px;background:#b45309;color:#fff;border:none" onclick="printSteelSummary()">🖨 PDF สรุปทั้งหมด</button>
+        </div>
+        <div class="filter-row" id="st-hist-filter" style="padding:0 0 8px"></div>
+        <div id="st-hist-list"></div>
+      </div>
+    </div>
+  </div>
+</div>
 </body>
 </html>
