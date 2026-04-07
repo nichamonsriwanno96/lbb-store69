@@ -761,14 +761,15 @@ function initApp(){
   Promise.all([
     loadFromSheet(),
     loadProjects(),
-    loadCatalogFromSheet()
+    loadCatalogFromSheet(),
+    loadSteelFromSheet()
   ]).finally(()=>{
     showSyncingIndicator(false);
     if(syncQueue.length) runSyncQueue();
   });
-  setInterval(()=>loadFromSheet(), 45000);
+  setInterval(()=>{ loadFromSheet(); loadSteelFromSheet(); }, 45000);
   document.addEventListener('visibilitychange',()=>{
-    if(document.visibilityState==='visible') loadFromSheet();
+    if(document.visibilityState==='visible'){ loadFromSheet(); loadSteelFromSheet(); }
   });
 }
 
@@ -3536,18 +3537,17 @@ function deleteSteelRecord(id){
 }
 
 function loadSteelFromSheet(){
-  gasGet('getSteelRecords').then(data=>{
-    if(!data||!data.ok||!data.records) return;
-    // merge กับ local — ใช้ id เป็น key
-    const localMap={};
-    steelRecords.forEach(r=>{localMap[String(r.id)]=r;});
+  return gasGet('getSteelRecords').then(data=>{
+    if(!data||!data.ok||!Array.isArray(data.records)) return;
+    // ใช้ Sheet เป็น source of truth — merge เฉพาะที่ local มีแต่ Sheet ไม่มี (pending)
+    const sheetIds = new Set(data.records.map(r=>String(r.id)));
+    const localOnly = steelRecords.filter(r=>!sheetIds.has(String(r.id))); // รอ sync
+    // แปลง items/concreteItems จาก string → array
     data.records.forEach(sd=>{
-      if(!localMap[String(sd.id)]){
-        // แปลง items string → array
-        if(typeof sd.items==='string'){try{sd.items=JSON.parse(sd.items);}catch(e){sd.items=[];}}
-        steelRecords.push(sd);
-      }
+      if(typeof sd.items==='string'){try{sd.items=JSON.parse(sd.items);}catch(e){sd.items=[];}}
+      if(typeof sd.concreteItems==='string'){try{sd.concreteItems=JSON.parse(sd.concreteItems);}catch(e){sd.concreteItems=[];}}
     });
+    steelRecords = [...data.records, ...localOnly];
     steelRecords.sort((a,b)=>b.id-a.id);
     localStorage.setItem('lbb_steel',JSON.stringify(steelRecords));
     if(document.getElementById('pg-steel')?.classList.contains('on')) renderSteelHistory();
