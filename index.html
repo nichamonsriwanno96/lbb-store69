@@ -2082,13 +2082,29 @@ function delCatalog(idx){
 // ── UTILS ──────────────────────────────────────────────────────────────────────
 function fmtDate(d){
   if(!d||d==='undefined'||d==='null') return '';
+  var s=String(d).trim();
+  // รับ dd/mm/yyyy พ.ศ. แล้ว (4 หลัก > 2500)
+  if(/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(s) && parseInt(s.split('/')[2])>2400) return s;
   // รับ YYYY-MM-DD
-  var p=String(d).split('-');
-  if(p.length===3 && p[0].length===4) return p[2]+'/'+p[1]+'/'+(parseInt(p[0])+543);
-  // รับ timestamp
-  var dt=new Date(typeof d==='number'?d:parseInt(d));
-  if(!isNaN(dt.getTime())) return dt.getDate()+'/'+(dt.getMonth()+1)+'/'+(dt.getFullYear()+543);
-  return String(d);
+  if(/^\d{4}-\d{2}-\d{2}/.test(s)){
+    var p=s.split('-');
+    return p[2].substring(0,2)+'/'+p[1]+'/'+(parseInt(p[0])+543);
+  }
+  // รับ Date string ทุก format (รวม GMT+0700)
+  // ใช้ UTC เพื่อป้องกัน timezone
+  var dt=new Date(s);
+  if(!isNaN(dt.getTime())){
+    var y=dt.getUTCFullYear(), m=dt.getUTCMonth()+1, day=dt.getUTCDate();
+    // ถ้า year < 2400 แสดงว่าเป็น ค.ศ. ต้อง +543
+    if(y<2400) y+=543;
+    return day+'/'+m+'/'+y;
+  }
+  // timestamp number
+  if(!isNaN(parseInt(d))){
+    var dt2=new Date(parseInt(d));
+    if(!isNaN(dt2.getTime())) return dt2.getUTCDate()+'/'+(dt2.getUTCMonth()+1)+'/'+(dt2.getUTCFullYear()+543);
+  }
+  return s;
 }
 function goPage(name){
   document.querySelectorAll('.pg').forEach(p=>p.classList.remove('on'));
@@ -2109,7 +2125,7 @@ function toast(msg,type=''){
   setTimeout(()=>el.classList.remove('show'),2500);
 }
 
-const GAS_URL='https://script.google.com/macros/s/AKfycbzpPPIxcYYNK18edi0sdj1Zf9uV_RVr4NrnVrDfGLQfq8l-LPUYI3I3Bnth5u9hjhropQ/exec';
+const GAS_URL='https://script.google.com/macros/s/AKfycbzWHx0ikDGzmd5ObJq86e9QLv0OU_-Tig2s50btsJzxdjjtKB4PWJV7wP1oIoO4vr8ibQ/exec';
 
 // ── SYNC QUEUE — เก็บ request ที่ยังไม่ได้ส่ง แล้ว retry อัตโนมัติ ─────────────
 let syncQueue = JSON.parse(localStorage.getItem('lbb_sync_queue')||'[]');
@@ -3105,6 +3121,7 @@ table{width:100%;border-collapse:collapse}
 
 // ── STEEL RECORDS ─────────────────────────────────────────────────────────────
 let steelRecords = JSON.parse(localStorage.getItem('lbb_steel')||'[]');
+let _editSteelId = null; // id ของ record ที่กำลังแก้ไข
 
 function saveSteelRecord(){
   const proj = document.getElementById('st-proj').value;
@@ -3137,11 +3154,12 @@ function saveSteelRecord(){
   if(!items.length){toast('กรุณากรอกข้อมูลเหล็กอย่างน้อย 1 แถว','err');return;}
 
   const rec={
-    id: Date.now(),
+    id: _editSteelId || Date.now(),
     proj, date: dateRaw, dateDisplay: fmtThaiDate(dateRaw),
     dia, bundle, note,
     priceKg, wageKg, wireQty, wirePrice, cPrice,
     c5, c75, c75h, c20,
+    concreteItems,
     items, grandW: grandW.toFixed(2),
     steelCost:(priceKg*grandW).toFixed(2),
     wageCost:(wageKg*grandW).toFixed(2),
@@ -3149,6 +3167,11 @@ function saveSteelRecord(){
     cCost:((c5+c75+c75h+c20)*cPrice).toFixed(2),
   };
 
+  // ถ้าแก้ไข ให้ลบ record เดิมก่อน
+  if(_editSteelId){
+    steelRecords = steelRecords.filter(r=>String(r.id)!==String(_editSteelId));
+    _editSteelId = null;
+  }
   steelRecords.unshift(rec);
   localStorage.setItem('lbb_steel',JSON.stringify(steelRecords));
 
@@ -3482,11 +3505,11 @@ function removeConcreteRow(id){
 function renderConcreteRows(){
   const tbody=document.getElementById('concrete-rows');
   if(!tbody)return;
-  tbody.innerHTML=concreteRows.map(r=>`
+  tbody.innerHTML=concreteRows.map((r,idx)=>`
     <tr>
-      <td style="padding:2px"><input class="fi" style="padding:4px 6px;font-size:12px" placeholder="เช่น 5 ซม., 7.5 ซม." value="${r.size}" oninput="concreteRows.find(x=>x.id===${r.id}).size=this.value"></td>
-      <td style="padding:2px"><input class="fi" type="number" style="padding:4px 6px;font-size:12px;text-align:center" placeholder="0" value="${r.qty}" oninput="concreteRows.find(x=>x.id===${r.id}).qty=this.value;calcSteel()"></td>
-      <td style="padding:2px"><input class="fi" type="number" style="padding:4px 6px;font-size:12px;text-align:center" placeholder="0" value="${r.price}" oninput="concreteRows.find(x=>x.id===${r.id}).price=this.value;calcSteel()"></td>
+      <td style="padding:2px"><input class="fi" style="padding:4px 6px;font-size:12px" placeholder="เช่น 5 ซม., 7.5 ซม." value="${r.size}" oninput="concreteRows[${idx}].size=this.value"></td>
+      <td style="padding:2px"><input class="fi" type="number" style="padding:4px 6px;font-size:12px;text-align:center" placeholder="0" value="${r.qty}" oninput="concreteRows[${idx}].qty=this.value;calcSteel()"></td>
+      <td style="padding:2px"><input class="fi" type="number" style="padding:4px 6px;font-size:12px;text-align:center" placeholder="0" value="${r.price}" oninput="concreteRows[${idx}].price=this.value;calcSteel()"></td>
       <td style="text-align:center;font-size:12px;color:#b45309;font-weight:600" id="cr-total-${r.id}">-</td>
       <td style="text-align:center;padding:2px"><button onclick="removeConcreteRow(${r.id})" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:14px">✕</button></td>
     </tr>`).join('');
@@ -3507,14 +3530,27 @@ function getConcreteTotal(){
 }
 
 function getConcreteForPDF(){
-  // สำหรับแสดงใน PDF และบันทึก
-  const checked=concreteRows.filter(r=>parseFloat(r.qty)>0);
-  return checked.map(r=>({
-    size:r.size,
-    qty:parseFloat(r.qty)||0,
-    price:parseFloat(r.price)||0,
-    total:(parseFloat(r.qty)||0)*(parseFloat(r.price)||0)
-  }));
+  // sync ค่าจาก DOM ก่อน (กรณีที่ oninput ยังไม่ได้ fire)
+  const tbody=document.getElementById('concrete-rows');
+  if(tbody){
+    tbody.querySelectorAll('tr').forEach((tr,i)=>{
+      if(concreteRows[i]){
+        const inputs=tr.querySelectorAll('input');
+        if(inputs[0]) concreteRows[i].size=inputs[0].value;
+        if(inputs[1]) concreteRows[i].qty=inputs[1].value;
+        if(inputs[2]) concreteRows[i].price=inputs[2].value;
+      }
+    });
+  }
+  return concreteRows
+    .filter(r=>parseFloat(r.qty)>0 || r.size)
+    .map(r=>({
+      size:r.size||'',
+      qty:parseFloat(r.qty)||0,
+      price:parseFloat(r.price)||0,
+      total:(parseFloat(r.qty)||0)*(parseFloat(r.price)||0)
+    }))
+    .filter(r=>r.qty>0);
 }
 
 function getConcreteCheckboxStr(){
@@ -3614,9 +3650,8 @@ function editSteelRecord(id){
   document.getElementById('st-wire').value=rec.wireQty||'';
   document.getElementById('st-wire-price').value=rec.wirePrice||'';
   document.getElementById('st-note').value=rec.note||'';
-  // ลบ record เดิม เพื่อ save ใหม่
-  steelRecords = steelRecords.filter(r=>String(r.id)!==String(id));
-  localStorage.setItem('lbb_steel',JSON.stringify(steelRecords));
+  // เก็บ id เดิมไว้ เพื่อ save ทับ
+  _editSteelId = id;
   renderSteelRows();
   renderConcreteRows();
   calcSteel();
