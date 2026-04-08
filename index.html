@@ -592,6 +592,9 @@ input,select,textarea,button{font-family:var(--font)}
     <div style="font-size:18px;font-weight:700">เอกสารทั้งหมด</div>
   </div>
   <div id="stats-wrap" style="padding-top:12px"></div>
+  <div style="padding:8px 12px 0">
+    <input class="fi" id="history-search" placeholder="🔍 ค้นหา เลขเอกสาร / โครงการ / ชื่ออุปกรณ์..." oninput="renderHistory()" style="font-size:13px">
+  </div>
   <div class="filter-row">
     <button class="filter-btn on" onclick="setFilter('all',this)">ทั้งหมด</button>
     <button class="filter-btn" onclick="setFilter('out',this)">นำออก</button>
@@ -1409,6 +1412,17 @@ function renderHistory(){
   else if(currentFilter==='pending')filtered=docs.filter(d=>d.ประเภท==='out'&&d.สถานะ==='ออก');
   else if(currentFilter==='loss')filtered=docs.filter(d=>d.ประเภท==='loss');
   else if(currentFilter==='buy')filtered=docs.filter(d=>d.ประเภท==='in'&&d.สถานะ==='รับเข้าสโตร์');
+  // กรองตาม search
+  const histQ=(document.getElementById('history-search')?.value||'').toLowerCase().trim();
+  if(histQ){
+    filtered=filtered.filter(d=>{
+      if((d.เลขเอกสาร||'').toLowerCase().includes(histQ)) return true;
+      if((d.โครงการ||'').toLowerCase().includes(histQ)) return true;
+      if((d.ผู้ขออนุญาต||'').toLowerCase().includes(histQ)) return true;
+      if((d.หมายเหตุ||'').toLowerCase().includes(histQ)) return true;
+      return (d.รายการสินค้า||[]).some(it=>(it.รายการ||'').toLowerCase().includes(histQ)||(it.ขนาด||'').toLowerCase().includes(histQ));
+    });
+  }
 
   if(!filtered.length){
     listEl.innerHTML=`<div style="text-align:center;padding:48px 24px;color:var(--t3)"><div style="font-size:36px;margin-bottom:12px">📋</div><div style="font-size:14px">ไม่มีเอกสาร</div></div>`;
