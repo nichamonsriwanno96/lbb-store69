@@ -1810,8 +1810,8 @@ function renderStock(){
             <div style="font-size:11px;color:var(--t3);margin-top:2px">ออก ${r.out} | คืน ${r.in}${r.loss?` | ⚠️ สูญ ${r.loss}`:''}${r.mvout?` | โยกออก ${r.mvout}`:''}${r.mvin?` | โยกเข้า ${r.mvin}`:''}${auditInfo}</div>
           </div>
           <div style="text-align:right;flex-shrink:0">
-            <div style="font-size:18px;font-weight:700;font-family:var(--mono);color:${c}">${r.noReturn?'-':r.net}</div>
-            <div style="font-size:10px;color:var(--t3)">${r.noReturn?'สิ้นเปลือง':r.net===0?"คืนครบ ✓":"ต้องคืน"}</div>
+            <div style="font-size:18px;font-weight:700;font-family:var(--mono);color:${c}">${r.noReturn?'-':r.net===0?'✓':r.net}</div>
+            <div style="font-size:10px;color:var(--t3)">${r.noReturn?'สิ้นเปลือง':r.net===0?"คืนครบ":"ต้องคืน"}</div>
           </div>
         </div>`;}).join('')}
     </div>`).join('');
@@ -1852,10 +1852,10 @@ function printStock(){
         <th style="border:1px solid #999;padding:4px 6px;text-align:center;width:65px;color:#c0392b">ต้องคืน</th>
       </tr>`;
     const itemRows=items.map((r,i)=>{
-      const displayNet = r.noReturn ? '-' : r.net;
+      const displayNet = r.noReturn ? '-' : r.net===0 ? '✓' : r.net;
       const netColor=r.noReturn?'#888':r.net>0?'#c0392b':r.net===0?'#27ae60':'#888';
       const netBg=r.noReturn?'#f5f5f5':r.net>0?'#fdf2f2':r.net===0?'#f0faf5':'#fff';
-      const netLabel=r.noReturn?'สิ้นเปลือง':r.net===0?'✓':'';
+      const netLabel=r.noReturn?'สิ้นเปลือง':'';
       return`<tr style="background:${i%2===0?'#fff':'#fafafa'}">
         <td style="border:1px solid #ddd;text-align:center;font-size:10pt;padding:4px">${i+1}</td>
         <td style="border:1px solid #ddd;padding:4px 8px;font-size:10pt">${r.name}${r.size?'<br><span style="font-size:9pt;color:#555">'+r.size+'</span>':''}${r.model?'<span style="font-size:9pt;color:#888"> / '+r.model+'</span>':''}</td>
@@ -2514,6 +2514,7 @@ function buildStockMap() {
       };
       if (t === 'in') map[mk(proj, name, size, model)].in += qty;
       else if (t === 'out') map[mk(proj, name, size, model)].out += qty;
+      else if (t === 'loss') { map[mk(proj, name, size, model)].loss = (map[mk(proj, name, size, model)].loss||0) + qty; }
       else if (t === 'mv') {
         if (mf) map[mk(mf, name, size, model)].mvout += qty;
         if (mt) map[mk(mt, name, size, model)].mvin += qty;
@@ -2527,9 +2528,9 @@ function buildStockMap() {
   );
   return Object.values(map).map(r => ({
     ...r,
+    loss: r.loss||0,
     noReturn: noReturnSet.has(r.name.trim()),
-    net: noReturnSet.has(r.name.trim()) ? 0 : (r.in - r.out + r.mvin - r.mvout),
-    loss: r.loss||0
+    net: noReturnSet.has(r.name.trim()) ? 0 : ((r.out + r.mvin) - r.in - r.mvout - (r.loss||0))
   }));
 }
 
