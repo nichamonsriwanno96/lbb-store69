@@ -1494,6 +1494,10 @@ function delDoc(id){
   if(!confirm('ลบเอกสารนี้?'))return;
   docs=docs.filter(d=>d.id!==id);
   localStorage.setItem('lbk_docs',JSON.stringify(docs));
+  // บันทึก id ที่ลบแล้ว เพื่อไม่ให้ loadFromSheet restore กลับมา
+  const deleted=JSON.parse(localStorage.getItem('lbk_deleted_ids')||'[]');
+  if(!deleted.includes(String(id))) deleted.push(String(id));
+  localStorage.setItem('lbk_deleted_ids',JSON.stringify(deleted));
   renderHistory();
   toast('กำลังลบจาก Sheet…');
   gasPost('deleteDoc',{id}).then(r=>{
@@ -1743,22 +1747,8 @@ table{width:100%;border-collapse:collapse}
 let stockProjFilter='all';
 function renderStock(){
   const q=(document.getElementById('stock-search')?.value||'').toLowerCase();
-  const map={};
-  docs.forEach(doc=>{
-    const proj=doc.โครงการ||'';
-    (doc.รายการสินค้า||[]).forEach(it=>{
-      const name=it.รายการ||'';const qty=parseFloat(it.จำนวน)||0;if(!name||!qty)return;
-      const size=it.ขนาด||'';const model=it.รุ่น||'';
-      const t=doc.ประเภท,mf=doc.โยกจาก||'',mt=doc.โยกไป||'';
-      const mk=(p,n,s,m)=>{const k=n+'|'+s+'|'+m+'|'+p;if(!map[k])map[k]={name:n,size:s,model:m,proj:p,unit:it.หน่วย||'',in:0,out:0,mvin:0,mvout:0};return k;};
-      if(t==='in')map[mk(proj,name,size,model)].in+=qty;
-      else if(t==='out')map[mk(proj,name,size,model)].out+=qty;
-      else if(t==='loss'){map[mk(proj,name,size,model)].loss=(map[mk(proj,name,size,model)].loss||0)+qty;}
-      else if(t==='mv'){if(mf)map[mk(mf,name,size,model)].mvout+=qty;if(mt)map[mk(mt,name,size,model)].mvin+=qty;}
-    });
-  });
-  const rows=Object.values(map).map(r=>({...r,loss:r.loss||0,net:(r.out+r.mvin)-r.in-r.mvout-(r.loss||0)}))
-    .sort((a,b)=>a.proj.localeCompare(b.proj,'th')||a.name.localeCompare(b.name,'th')||a.size.localeCompare(b.size)||a.model.localeCompare(b.model));
+  const rows=buildStockMap()
+    .sort((a,b)=>a.proj.localeCompare(b.proj,'th')||a.name.localeCompare(b.name,'th')||a.size.localeCompare(b.size||'')||a.model.localeCompare(b.model||''));
   const projs=[...new Set(rows.map(r=>r.proj))].sort();
   const pf=document.getElementById('stock-proj-filter');
   pf.innerHTML=`<button class="filter-btn${stockProjFilter==='all'?' on':''}" onclick="stockProjFilter='all';renderStock()">ทั้งหมด</button>`
@@ -1820,30 +1810,16 @@ function renderStock(){
             <div style="font-size:11px;color:var(--t3);margin-top:2px">ออก ${r.out} | คืน ${r.in}${r.loss?` | ⚠️ สูญ ${r.loss}`:''}${r.mvout?` | โยกออก ${r.mvout}`:''}${r.mvin?` | โยกเข้า ${r.mvin}`:''}${auditInfo}</div>
           </div>
           <div style="text-align:right;flex-shrink:0">
-            <div style="font-size:18px;font-weight:700;font-family:var(--mono);color:${c}">${r.net}</div>
-            <div style="font-size:10px;color:var(--t3)">${r.net===0?"คืนครบ ✓":"ต้องคืน"}</div>
+            <div style="font-size:18px;font-weight:700;font-family:var(--mono);color:${c}">${r.noReturn?'-':r.net}</div>
+            <div style="font-size:10px;color:var(--t3)">${r.noReturn?'สิ้นเปลือง':r.net===0?"คืนครบ ✓":"ต้องคืน"}</div>
           </div>
         </div>`;}).join('')}
     </div>`).join('');
 }
 
 function printStock(){
-  // คำนวณข้อมูลเหมือน renderStock แต่ไม่กรองด้วย search box
-  const map={};
-  docs.forEach(doc=>{
-    const proj=doc.โครงการ||'';
-    (doc.รายการสินค้า||[]).forEach(it=>{
-      const name=it.รายการ||'';const qty=parseFloat(it.จำนวน)||0;if(!name||!qty)return;
-      const t=doc.ประเภท,mf=doc.โยกจาก||'',mt=doc.โยกไป||'';
-      const size=it.ขนาด||'';const model=it.รุ่น||'';
-      const mk=(p,n,s,m)=>{const k=n+'|'+s+'|'+m+'|'+p;if(!map[k])map[k]={name:n,size:s,model:m,proj:p,unit:it.หน่วย||'',in:0,out:0,mvin:0,mvout:0};return k;};
-      if(t==='in')map[mk(proj,name,size,model)].in+=qty;
-      else if(t==='out')map[mk(proj,name,size,model)].out+=qty;
-      else if(t==='loss'){map[mk(proj,name,size,model)].loss=(map[mk(proj,name,size,model)].loss||0)+qty;}
-      else if(t==='mv'){if(mf)map[mk(mf,name,size,model)].mvout+=qty;if(mt)map[mk(mt,name,size,model)].mvin+=qty;}
-    });
-  });
-  const rows=Object.values(map).map(r=>({...r,loss:r.loss||0,net:(r.out+r.mvin)-r.in-r.mvout-(r.loss||0)}))
+  // ใช้ buildStockMap() เหมือน renderStock เพื่อให้ noReturn ทำงานถูกต้อง
+  const rows=buildStockMap()
     .sort((a,b)=>a.proj.localeCompare(b.proj,'th')||a.name.localeCompare(b.name,'th')||(a.size||'').localeCompare(b.size||'')||(a.model||'').localeCompare(b.model||''));
 
   // กรองตาม proj filter ปัจจุบัน
@@ -1876,8 +1852,10 @@ function printStock(){
         <th style="border:1px solid #999;padding:4px 6px;text-align:center;width:65px;color:#c0392b">ต้องคืน</th>
       </tr>`;
     const itemRows=items.map((r,i)=>{
-      const netColor=r.net>0?'#c0392b':r.net===0?'#27ae60':'#888';
-      const netBg=r.net>0?'#fdf2f2':r.net===0?'#f0faf5':'#fff';
+      const displayNet = r.noReturn ? '-' : r.net;
+      const netColor=r.noReturn?'#888':r.net>0?'#c0392b':r.net===0?'#27ae60':'#888';
+      const netBg=r.noReturn?'#f5f5f5':r.net>0?'#fdf2f2':r.net===0?'#f0faf5':'#fff';
+      const netLabel=r.noReturn?'สิ้นเปลือง':r.net===0?'✓':'';
       return`<tr style="background:${i%2===0?'#fff':'#fafafa'}">
         <td style="border:1px solid #ddd;text-align:center;font-size:10pt;padding:4px">${i+1}</td>
         <td style="border:1px solid #ddd;padding:4px 8px;font-size:10pt">${r.name}${r.size?'<br><span style="font-size:9pt;color:#555">'+r.size+'</span>':''}${r.model?'<span style="font-size:9pt;color:#888"> / '+r.model+'</span>':''}</td>
@@ -1885,7 +1863,7 @@ function printStock(){
         <td style="border:1px solid #ddd;text-align:center;font-size:10pt;padding:4px">${r.out||'-'}</td>
         <td style="border:1px solid #ddd;text-align:center;font-size:10pt;padding:4px">${r.in||'-'}</td>
         <td style="border:1px solid #ddd;text-align:center;font-size:10pt;padding:4px;color:${r.loss?'#c0392b':'#aaa'}">${r.loss||'-'}</td>
-        <td style="border:1px solid #ddd;text-align:center;font-size:11pt;font-weight:700;padding:4px;background:${netBg};color:${netColor}">${r.net}</td>
+        <td style="border:1px solid #ddd;text-align:center;font-size:11pt;font-weight:700;padding:4px;background:${netBg};color:${netColor}">${displayNet}${netLabel?'<br><span style="font-size:8pt;font-weight:400">'+netLabel+'</span>':''}</td>
       </tr>`;
     }).join('');
     // แถวสรุปท้ายกลุ่ม
@@ -2020,6 +1998,7 @@ function renderCatalog(q){
 }
 function openAddCatalog(){
   document.getElementById('catalog-modal-title').textContent = 'เพิ่มอุปกรณ์';
+  const _nr=document.getElementById('cm-noreturn');if(_nr)_nr.checked=false;
   ['cm-code','cm-name','cm-unit','cm-edit-idx','cm-edit-id'].forEach(id=>{
     const el=document.getElementById(id); if(el) el.value='';
   });
@@ -2030,16 +2009,14 @@ function openEditCatalogByCode(code){
   // หาใน customCatalog ก่อน
   const custIdx=customCatalog.findIndex(c=>c.code===code);
   if(custIdx>=0){ openEditCatalog(custIdx); return; }
-  // ถ้าไม่มีใน custom ให้สร้างใหม่จาก BASE หรือ Sheet
+  // ถ้าไม่มีใน custom — clone มาจาก BASE หรือ Sheet แล้ว push เข้า custom
   const src=allCatalogList().find(c=>c.code===code);
   if(!src){ toast('ไม่พบรายการ','err'); return; }
-  document.getElementById('catalog-modal-title').textContent = 'แก้ไขอุปกรณ์';
-  document.getElementById('cm-code').value = src.code||'';
-  document.getElementById('cm-name').value = src.name||'';
-  document.getElementById('cm-unit').value = src.unit||'';
-  document.getElementById('cm-edit-idx').value = '';  // ยังไม่มีใน custom
-  document.getElementById('cm-edit-id').value = src.id||'';
-  document.getElementById('catalog-modal').classList.add('open');
+  // เพิ่มเข้า customCatalog ทันที เพื่อให้แก้ไขได้
+  const newItem={...src, id:src.id||'cat_'+Date.now(), noReturn:!!(src.noReturn||src.noreturn)};
+  customCatalog.push(newItem);
+  localStorage.setItem('lbk_catalog',JSON.stringify(customCatalog));
+  openEditCatalog(customCatalog.length-1);
 }
 function openEditCatalog(idx){
   const c = customCatalog[idx];
@@ -2050,6 +2027,7 @@ function openEditCatalog(idx){
   document.getElementById('cm-unit').value = c.unit||'';
   document.getElementById('cm-edit-idx').value = String(idx);
   document.getElementById('cm-edit-id').value  = c.id||'';
+  const nr=document.getElementById('cm-noreturn');if(nr)nr.checked=!!(c.noReturn||c.noreturn);
   document.getElementById('catalog-modal').classList.add('open');
 }
 function closeCatalogModal(){const m=document.getElementById('catalog-modal');if(m)m.classList.remove('open');}
@@ -2061,21 +2039,20 @@ function saveCatalogItem(){
   const editId  = document.getElementById('cm-edit-id').value;
   if(!name){ toast('กรุณากรอกชื่ออุปกรณ์','err'); return; }
 
+  const noReturn = document.getElementById('cm-noreturn')?.checked || false;
   if(editIdx !== ''){
     // แก้ไข
-    customCatalog[parseInt(editIdx)] = {code, name, unit, id: editId};
+    customCatalog[parseInt(editIdx)] = {code, name, unit, noReturn, id: editId};
     toast('แก้ไขแล้ว ✓','ok');
-    gasPost('saveCatalogItem',{code,name,unit,id:editId}).catch(()=>{});
+    gasPost('saveCatalogItem',{code,name,unit,noReturn,id:editId}).catch(()=>{});
   } else {
     // เพิ่มใหม่
     const newId = 'cat_'+Date.now();
-    customCatalog.push({code, name, unit, id: newId});
+    customCatalog.push({code, name, unit, noReturn, id: newId});
     toast('เพิ่มแล้ว ✓','ok');
-    gasPost('saveCatalogItem',{code,name,unit,id:newId}).catch(()=>{});
+    gasPost('saveCatalogItem',{code,name,unit,noReturn,id:newId}).catch(()=>{});
   }
   localStorage.setItem('lbk_catalog', JSON.stringify(customCatalog));
-  // sync catalog ให้เครื่องอื่นด้วย
-  loadCatalogFromSheet();
   // callback สำหรับ quickAdd
   if(window._quickAddCallback){
     const savedName=name, savedUnit=unit;
@@ -2084,6 +2061,9 @@ function saveCatalogItem(){
   }
   closeCatalogModal();
   renderCatalog();
+  // re-render stock ให้เห็นผล noReturn ทันที
+  renderStock();
+  renderStoreStock();
 }
 function delCatalog(idx){
   const c=customCatalog[idx];if(!c)return;
@@ -2264,11 +2244,11 @@ function loadFromSheet(){
           : (sd.ลายเซ็น||{})
       };
     });
-    // เอกสารที่ยังใน queue (ยังไม่ถึง Sheet) — แสดงชั่วคราว
+    // เอกสารที่อยู่ใน local แต่ยังไม่มีใน Sheet — preserve ไว้ (ยกเว้นที่ลบแล้ว)
     const sheetIds=new Set(data.docs.map(d=>String(d.id)));
-    const queuedIds=new Set(syncQueue.filter(q=>q.action==='addDoc').map(q=>String(q.body?.id)));
-    const localPending=JSON.parse(localStorage.getItem('lbk_docs')||'[]')
-      .filter(d=>queuedIds.has(String(d.id))&&!sheetIds.has(String(d.id)));
+    const deletedIds=new Set(JSON.parse(localStorage.getItem('lbk_deleted_ids')||'[]'));
+    const localAll=JSON.parse(localStorage.getItem('lbk_docs')||'[]');
+    const localPending=localAll.filter(d=>!sheetIds.has(String(d.id))&&!deletedIds.has(String(d.id)));
     docs=[...sheetDocs,...localPending];
     localStorage.setItem('lbk_docs',JSON.stringify(docs));
     renderHistory();
@@ -2288,6 +2268,13 @@ function loadProjects(){
 function loadCatalogFromSheet(){
   return gasGet('getCatalog').then(data=>{
     if(data&&data.ok&&data.items&&data.items.length){
+      // preserve noReturn จาก customCatalog (Sheet ยังไม่มี column นี้)
+      const localMap={};
+      customCatalog.forEach(c=>{ localMap[c.id||c.code]=c; });
+      data.items = data.items.map(it=>{
+        const local = localMap[it.id||it.code];
+        return local ? {...it, noReturn: local.noReturn||false} : it;
+      });
       window._sheetCatalog=data.items;
       localStorage.setItem('lbb_sheet_cat',JSON.stringify(data.items));
     }
@@ -2335,6 +2322,12 @@ function openEditDoc(id){
   if(statusEl) statusEl.value=doc.สถานะ||'ออก';
   editItems = (doc.รายการสินค้า||[]).map((it,i)=>Object.assign({eid:Date.now()+i},it));
   editPhotos = [...(doc.รูปถ่าย||[])];
+  // โยกย้าย fields
+  const mvFrom = document.getElementById('edit-mv-from');
+  const mvTo   = document.getElementById('edit-mv-to');
+  if(mvFrom) mvFrom.value = doc.โยกจาก||'';
+  if(mvTo)   mvTo.value   = doc.โยกไป||'';
+  toggleEditMvFields();
   renderEditItems();
   renderEditPhotos();
   const modal = document.getElementById('edit-modal');
@@ -2423,13 +2416,21 @@ function saveEditDoc(){
   const idVal = document.getElementById('edit-doc-id').value;
   const idx = docs.findIndex(d=>String(d.id)===String(idVal));
   if(idx<0){ toast('ไม่พบเอกสาร','err'); return; }
+  const newStatus = document.getElementById('edit-status')?.value || docs[idx].สถานะ;
   docs[idx].โครงการ     = document.getElementById('edit-proj').value.trim();
   docs[idx].วันที่       = document.getElementById('edit-date').value;
   docs[idx].ทะเบียนรถ   = document.getElementById('edit-car').value.trim();
   docs[idx].ผู้ขออนุญาต = document.getElementById('edit-req').value.trim();
   docs[idx].ผู้นำของ    = document.getElementById('edit-carrier').value.trim();
   docs[idx].หมายเหตุ    = document.getElementById('edit-note').value.trim();
-  docs[idx].สถานะ       = document.getElementById('edit-status')?.value || docs[idx].สถานะ;
+  docs[idx].สถานะ       = newStatus;
+  docs[idx].โยกจาก      = document.getElementById('edit-mv-from')?.value.trim()||'';
+  docs[idx].โยกไป       = document.getElementById('edit-mv-to')?.value.trim()||'';
+  // อัปเดตประเภทตามสถานะ
+  if(newStatus==='โยก') docs[idx].ประเภท='mv';
+  else if(newStatus==='รับเข้าสโตร์') docs[idx].ประเภท='in';
+  else if(newStatus==='ออก') docs[idx].ประเภท='out';
+  else if(newStatus==='คืน') docs[idx].ประเภท='in';
   docs[idx].รายการสินค้า = editItems.map(({eid:_,...r})=>r);
   docs[idx].รูปถ่าย      = [...editPhotos];
   localStorage.setItem('lbk_docs', JSON.stringify(docs));
@@ -2446,6 +2447,8 @@ function saveEditDoc(){
   if(editPhotos.length) uploadPhotosToDrive(docs[idx].เลขเอกสาร, editPhotos, docs[idx].id);
   closeEditDoc();
   renderHistory();
+  renderStock();
+  renderStoreStock();
   toast('กำลัง sync…');
 }
 
@@ -2517,7 +2520,17 @@ function buildStockMap() {
       }
     });
   });
-  return Object.values(map).map(r => ({ ...r, net: r.in - r.out + r.mvin - r.mvout }));
+  const noReturnSet = new Set(
+    allCatalogList()
+      .filter(c=>c.noReturn===true||c.noReturn==='true'||c.noreturn===true)
+      .map(c=>c.name.trim())
+  );
+  return Object.values(map).map(r => ({
+    ...r,
+    noReturn: noReturnSet.has(r.name.trim()),
+    net: noReturnSet.has(r.name.trim()) ? 0 : (r.in - r.out + r.mvin - r.mvout),
+    loss: r.loss||0
+  }));
 }
 
 function openAudit() {
@@ -3693,6 +3706,12 @@ function editSteelRecord(id){
     toast('โหลดข้อมูลแล้ว — แก้ไขแล้วกด 💾 บันทึก','ok');
   }, 100);
 }
+
+function toggleEditMvFields(){
+  const status = document.getElementById('edit-status')?.value;
+  const wrap = document.getElementById('edit-mv-wrap');
+  if(wrap) wrap.style.display = status==='โยก' ? 'block' : 'none';
+}
 </script>
 
 <!-- EDIT MODAL -->
@@ -3715,7 +3734,7 @@ function editSteelRecord(id){
       </div>
       <div class="f" style="padding:0 0 10px">
         <div class="fl">สถานะ</div>
-        <select class="fs" id="edit-status">
+        <select class="fs" id="edit-status" onchange="toggleEditMvFields()">
           <option value="ออก">นำของออก</option>
           <option value="คืน">นำของเข้า</option>
           <option value="รับเข้าสโตร์">รับเข้าสโตร์</option>
@@ -3725,6 +3744,12 @@ function editSteelRecord(id){
       <div style="font-size:11px;font-weight:600;color:var(--t2);text-transform:uppercase;letter-spacing:.07em;padding:4px 0 8px">รายการอุปกรณ์</div>
       <div id="edit-items-wrap"></div>
       <button class="btn-add" style="margin:4px 0 10px;width:100%;justify-content:center;padding:10px" onclick="addEditItem()">＋ เพิ่มรายการ</button>
+      <div id="edit-mv-wrap" style="display:none;padding:0 0 10px">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:9px">
+          <div class="f" style="padding:0"><div class="fl">โยกจาก</div><input class="fi" id="edit-mv-from" placeholder="ต้นทาง"></div>
+          <div class="f" style="padding:0"><div class="fl">โยกไป</div><input class="fi" id="edit-mv-to" placeholder="ปลายทาง"></div>
+        </div>
+      </div>
       <div class="f" style="padding:0 0 10px"><div class="fl">หมายเหตุเอกสาร</div><textarea class="ft" id="edit-note" rows="2" placeholder="หมายเหตุเพิ่มเติม (ถ้ามี)"></textarea></div>
       <div style="font-size:11px;font-weight:600;color:var(--t2);text-transform:uppercase;letter-spacing:.07em;padding:4px 0 8px">รูปถ่ายประกอบ</div>
       <div class="photo-row" id="edit-photo-row">
@@ -3758,6 +3783,10 @@ function editSteelRecord(id){
       <div class="f" style="padding:0 0 10px">
         <div class="fl">หน่วย</div>
         <input class="fi" id="cm-unit" placeholder="ตัว/อัน">
+      </div>
+      <div style="padding:0 0 10px;display:flex;align-items:center;gap:8px">
+        <input type="checkbox" id="cm-noreturn" style="width:16px;height:16px;cursor:pointer">
+        <label for="cm-noreturn" style="font-size:13px;cursor:pointer;color:var(--t1)">วัสดุสิ้นเปลือง / ไม่ต้องคืน <span style="font-size:11px;color:var(--t2)">(net = 0 ในสต็อก)</span></label>
       </div>
       <input type="hidden" id="cm-edit-idx" value="">
       <input type="hidden" id="cm-edit-id" value="">
