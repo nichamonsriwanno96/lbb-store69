@@ -2119,7 +2119,7 @@ function toast(msg,type=''){
   setTimeout(()=>el.classList.remove('show'),2500);
 }
 
-const GAS_URL='https://script.google.com/macros/s/AKfycbzWHx0ikDGzmd5ObJq86e9QLv0OU_-Tig2s50btsJzxdjjtKB4PWJV7wP1oIoO4vr8ibQ/exec';
+const GAS_URL='https://script.google.com/macros/s/AKfycbymgpgw03GHbP9i6doGcoU4Bijfa7OPn93RMUB_1p83JVgUjMsK0CbBvM_aAEslQhsQow/exec';
 
 // ── SYNC QUEUE — เก็บ request ที่ยังไม่ได้ส่ง แล้ว retry อัตโนมัติ ─────────────
 let syncQueue = JSON.parse(localStorage.getItem('lbb_sync_queue')||'[]');
@@ -2213,8 +2213,22 @@ function loadFromSheet(){
       const local=lm[String(sd.id)];
       return {
         ...sd,
-        // ถ้า local มีประเภทที่ละเอียดกว่า (loss/buy/mv) ให้ใช้ local
-        ประเภท: local?.ประเภท||sd.ประเภท||'out',
+        // detect ประเภทจากทุกแหล่ง — Sheet ส่ง ftype มาแล้ว แต่อาจเป็น 'out' ผิดๆ
+        ประเภท: (()=>{
+          const sheetType = sd.ประเภท||'';
+          const st = sd.สถานะ||'';
+          const localType = local?.ประเภท||'';
+          // ถ้า local เป็น loss/buy/mv ให้ใช้ local เสมอ (ละเอียดกว่า)
+          if(localType==='loss'||localType==='buy'||localType==='mv') return localType;
+          // detect จาก สถานะ ใน Sheet
+          if(st==='สูญเสีย'||st==='loss') return 'loss';
+          if(st==='รับเข้าสโตร์') return 'in';
+          if(st==='โยก') return 'mv';
+          // detect จาก ประเภท ใน Sheet (GAS ใหม่ส่ง loss มาถูกแล้ว)
+          if(sheetType==='loss') return 'loss';
+          // ใช้ local ถ้ามี ไม่งั้นใช้ sheet
+          return localType||sheetType||'out';
+        })(),
         สถานะ: local?.สถานะ||sd.สถานะ||'ออก',
         แหล่งข้อมูล: local?.แหล่งข้อมูล||sd.แหล่งข้อมูล||'',
         รูปถ่าย: local?.รูปถ่าย||[],
