@@ -1263,18 +1263,26 @@ function saveDoc(){
   };
   docs.unshift(doc);
   localStorage.setItem('lbk_docs',JSON.stringify(docs));
-  // sync to Sheet
+
+  // restore ปุ่มทันทีหลัง save local — ไม่รอ Sheet
+  _restore();
+  openPrintModal(doc);
+
+  // sync to Sheet ใน background พร้อม timeout 20 วิ
   const _p=Object.assign({},doc);
   _p.รูปถ่าย=[];_p.จำนวนรูป=(doc.รูปถ่าย||[]).length;
   _p.รายการสินค้า=JSON.stringify(doc.รายการสินค้า||[]);
   _p.ลายเซ็น=JSON.stringify(doc.ลายเซ็น||{});
+  const gasTimeout = setTimeout(()=>{
+    queuePost('addDoc',_p);
+    toast('บันทึกแล้ว ✓ (GAS timeout — จะซิงค์ภายหลัง)','ok');
+  }, 20000);
   gasPost('addDoc',_p).then(res=>{
-    _restore();
+    clearTimeout(gasTimeout);
     if(res&&res.queued) toast('บันทึกแล้ว ✓ (จะซิงค์เมื่อ online)','ok');
     else toast('บันทึก + ซิงค์แล้ว ✓','ok');
-  }).catch(()=>{ _restore(); queuePost('addDoc',_p); toast('บันทึกแล้ว ✓ (จะซิงค์เมื่อ online)','ok'); });
+  }).catch(()=>{ clearTimeout(gasTimeout); queuePost('addDoc',_p); toast('บันทึกแล้ว ✓ (จะซิงค์เมื่อ online)','ok'); });
   if(doc.รูปถ่าย && doc.รูปถ่าย.length) uploadPhotosToDrive(doc.เลขเอกสาร, doc.รูปถ่าย, doc.id);
-  openPrintModal(doc);
 }
 
 function clearForm(){
