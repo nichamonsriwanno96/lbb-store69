@@ -2396,12 +2396,15 @@ function loadProjects(){
 function loadCatalogFromSheet(){
   return gasGet('getCatalog').then(data=>{
     if(data&&data.ok&&data.items&&data.items.length){
-      // preserve noReturn จาก customCatalog (Sheet ยังไม่มี column นี้)
+      // merge noReturn และ alias จาก customCatalog ด้วย
       const localMap={};
-      customCatalog.forEach(c=>{ localMap[c.id||c.code]=c; });
+      customCatalog.forEach(c=>{ localMap[c.id||c.code]=c; localMap[c.code]=c; });
       data.items = data.items.map(it=>{
-        const local = localMap[it.id||it.code];
-        return local ? {...it, noReturn: local.noReturn||false} : it;
+        const local = localMap[it.id] || localMap[it.code];
+        // Sheet alias ใช้ก่อน ถ้าไม่มีค่อยใช้ local
+        const alias = (it.alias&&it.alias.length) ? it.alias : (local?.alias||[]);
+        const noReturn = local ? (local.noReturn||false) : (it.noReturn||false);
+        return {...it, alias, noReturn};
       });
       window._sheetCatalog=data.items;
       localStorage.setItem('lbb_sheet_cat',JSON.stringify(data.items));
