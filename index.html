@@ -2223,7 +2223,7 @@ function toast(msg,type=''){
   setTimeout(()=>el.classList.remove('show'),2500);
 }
 
-const GAS_URL='https://script.google.com/macros/s/AKfycbymgpgw03GHbP9i6doGcoU4Bijfa7OPn93RMUB_1p83JVgUjMsK0CbBvM_aAEslQhsQow/exec';
+const GAS_URL='https://script.google.com/macros/s/AKfycbxiHZLR9GEZ9AdGPkXKg2kd9GpPiMEQ-o2EBYuPWptfqxAp2Kd_FI6U6Z6ZZWQQWoCUsA/exec';
 
 // ── SYNC QUEUE — เก็บ request ที่ยังไม่ได้ส่ง แล้ว retry อัตโนมัติ ─────────────
 let syncQueue = JSON.parse(localStorage.getItem('lbb_sync_queue')||'[]');
@@ -2546,6 +2546,7 @@ function saveEditDoc(){
   // ป้องกันกดซ้ำ
   const saveBtn = document.querySelector('#edit-modal .btn-blue');
   if(saveBtn) { saveBtn.disabled=true; saveBtn.textContent='กำลังบันทึก…'; }
+  const restore = ()=>{ if(saveBtn){ saveBtn.disabled=false; saveBtn.textContent='💾 บันทึก'; } };
 
   const newStatus = document.getElementById('edit-status')?.value || docs[idx].สถานะ;
   docs[idx].โครงการ     = document.getElementById('edit-proj').value.trim();
@@ -2563,6 +2564,9 @@ function saveEditDoc(){
   else if(newStatus==='คืน') docs[idx].ประเภท='in';
   docs[idx].รายการสินค้า = editItems.map(({eid:_,...r})=>r);
   docs[idx].รูปถ่าย      = [...editPhotos];
+  // ย้าย doc ที่แก้ไขขึ้นบนสุด
+  const editedDoc = docs.splice(idx, 1)[0];
+  docs.unshift(editedDoc);
   localStorage.setItem('lbk_docs', JSON.stringify(docs));
 
   // บันทึก local เสร็จแล้ว — ปิด modal ทันที ไม่รอ Sheet
@@ -2572,14 +2576,17 @@ function saveEditDoc(){
   renderStoreStock();
   restore();
 
-  // sync Sheet ใน background
+  // sync Sheet ด้วย updateDoc — อัปเดตแถวเดิมใน Sheet ไม่ลบแล้วสร้างใหม่
   const p = Object.assign({},docs[idx]);
   p.รูปถ่าย=[]; p.รายการสินค้า=JSON.stringify(p.รายการสินค้า||[]); p.ลายเซ็น=JSON.stringify(p.ลายเซ็น||{});
-  gasPost('deleteDoc',{id: p.id}).then(()=>{
-    return gasPost('addDoc', p);
-  }).then(r=>{
+  const syncTimeout = setTimeout(()=>{
+    toast('แก้ไขใน app แล้ว (GAS timeout)','ok');
+  }, 20000);
+  gasPost('updateDoc', p).then(r=>{
+    clearTimeout(syncTimeout);
     if(r&&r.ok) toast('sync Sheet แล้ว ✓','ok');
-  }).catch(()=>{ toast('แก้ไขใน app แล้ว (จะซิงค์ภายหลัง)','ok'); });
+    else toast('แก้ไขใน app แล้ว (Sheet อาจมีปัญหา)','err');
+  }).catch(()=>{ clearTimeout(syncTimeout); toast('แก้ไขใน app แล้ว (จะซิงค์ภายหลัง)','ok'); });
 
   if(editPhotos.length) uploadPhotosToDrive(docs[idx].เลขเอกสาร, editPhotos, docs[idx].id);
 }
