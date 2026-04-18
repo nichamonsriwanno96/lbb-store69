@@ -1025,7 +1025,16 @@ function renderItems(){
       <div class="f"><div class="fl">หน่วย</div><input class="fi" id="in-${it.id}-unit" value="${it.unit||''}" placeholder="ตัว/อัน"></div>
     </div>
     <div class="row3">
-      <div class="f"><div class="fl">รุ่น/ความยาว/สี</div><input class="fi" id="in-${it.id}-model" value="${it.model||''}" placeholder="-"></div>
+      <div class="f"><div class="fl">รุ่น/ความยาว/สี</div>
+        <div style="display:flex;gap:6px">
+          <input class="fi" id="in-${it.id}-model" value="${it.model||''}" placeholder="เช่น 2, HR130-4" style="flex:1">
+          <select class="fs" id="in-${it.id}-modelunit" style="width:100px;flex-shrink:0" onchange="applyModelUnit(${it.id})">
+            <option value="" disabled selected>หน่วย</option>
+            ${getModelUnits().map(u=>`<option value="${u}">${u}</option>`).join('')}
+            <option value="__add__">✏️ จัดการหน่วย…</option>
+          </select>
+        </div>
+      </div>
       <div class="f"><div class="fl">ยี่ห้อ</div><input class="fi" id="in-${it.id}-brand" value="${it.brand||''}" placeholder="-"></div>
       <div class="f"><div class="fl">หมายเลข S/N</div><input class="fi" id="in-${it.id}-serial" value="${it.serial||''}" placeholder="-"></div>
     </div>
@@ -1051,16 +1060,41 @@ function getItemVals(id){
 }
 
 // ── CATALOG SEARCH ────────────────────────────────────────────────────────────
+function fuzzyMatch(name, q){
+  // 1. ตรงเป๊ะ (includes)
+  if(name.includes(q)) return {score:100, match:true};
+  // 2. ทุก token ของ q ต้องอยู่ใน name
+  const tokens = q.split(/\s+/).filter(Boolean);
+  if(tokens.length>1 && tokens.every(t=>name.includes(t))) return {score:80, match:true};
+  // 3. ตัดอักษรพิเศษ แล้ว includes
+  const clean = s=>s.replace(/[^\u0E00-\u0E7Fa-z0-9]/g,'');
+  if(clean(name).includes(clean(q))) return {score:70, match:true};
+  // 4. q ยาว>=3 และ name มีอักษรของ q ต่อกัน >= 70%
+  if(q.length>=3){
+    let i=0, matched=0;
+    for(const ch of name){ if(ch===q[i]){matched++;i++;} if(i>=q.length)break; }
+    if(matched/q.length>=0.7) return {score:50, match:true};
+  }
+  return {score:0, match:false};
+}
+
 function catSearch(id,val){
   const box=document.getElementById(`cat-${id}`);
   if(val.length<1){box.style.display='none';return}
   const q=val.toLowerCase();
   const _cat=allCatalogList();
-  const found=_cat.filter(c=>c.name.toLowerCase().includes(q)||c.code.toLowerCase().includes(q)).slice(0,8);
-  // ตรวจว่าชื่อตรงทุกตัวอักษรกับรายการในทะเบียนหรือเปล่า
+  // fuzzy search รวม alias
+  const scored=_cat.map(c=>{
+    const names=[c.name.toLowerCase(),...(c.alias||[]).map(a=>a.toLowerCase())];
+    const best=names.reduce((best,n)=>{const s=fuzzyMatch(n,q);return s.score>best.score?s:best},{score:0,match:false});
+    const codeHit=c.code.toLowerCase().includes(q);
+    return {c, s:codeHit&&!best.match?{score:60,match:true}:best};
+  }).filter(x=>x.s.match)
+    .sort((a,b)=>b.s.score-a.s.score)
+    .slice(0,10);
+  const found=scored.map(x=>x.c);
   const exactMatch=_cat.some(c=>c.name.toLowerCase()===q);
   if(!found.length){
-    // ไม่พบเลย — เตือน + ปุ่มเพิ่มทะเบียน
     box.innerHTML=`
       <div style="padding:8px 12px;font-size:12px;color:var(--out)">⚠️ ไม่มีในทะเบียน</div>
       <div class="cat-opt new" onmousedown="quickAddToCatalog(${id},'${esc(val)}')">
@@ -1069,12 +1103,14 @@ function catSearch(id,val){
     box.style.display='block';
     return;
   }
-  let html = found.map(c=>`
-    <div class="cat-opt" onmousedown="pickCat(${id},'${esc(c.name)}','${esc(c.unit)}','${c.code}')">
-      <span class="cat-code">${c.code}</span>${c.name}
+  const q2=val.toLowerCase();
+  let html = found.map(c=>{
+    const matchedAlias=(c.alias||[]).filter(a=>fuzzyMatch(a.toLowerCase(),q2).match);
+    const aliasBadge=matchedAlias.length?`<span style="font-size:10px;color:var(--t3);margin-left:4px">(${matchedAlias.join(', ')})</span>`:'';
+    return`<div class="cat-opt" onmousedown="pickCat(${id},'${esc(c.name)}','${esc(c.unit)}','${c.code}')">
+      <span class="cat-code">${c.code}</span>${c.name}${aliasBadge}
       <span class="cat-size">${c.unit}</span>
-    </div>`).join('');
-  // ถ้าพิมพ์ยาวพอแต่ยังไม่ตรงทุกตัว — แสดงปุ่มเพิ่ม
+    </div>`;}).join('');
   if(!exactMatch && val.length>=2){
     html += `<div class="cat-opt new" style="border-top:1px solid var(--border);margin-top:2px" onmousedown="quickAddToCatalog(${id},'${esc(val)}')">
       ＋ เพิ่ม "${val}" เข้าทะเบียน (ชื่อใหม่)
@@ -1111,6 +1147,55 @@ function pickCat(id,name,unit,code){
   hideCat(id);
 }
 function hideCat(id){const b=document.getElementById(`cat-${id}`);if(b)b.style.display='none'}
+// หน่วยรุ่น/ความยาว — เก็บใน localStorage แก้ไขได้
+const DEFAULT_MODEL_UNITS = ['เมตร','ซม.','นิ้ว','มม.','ลิตร','กิโลเมตร'];
+function getModelUnits(){
+  const saved = localStorage.getItem('lbb_model_units');
+  return saved ? JSON.parse(saved) : [...DEFAULT_MODEL_UNITS];
+}
+function saveModelUnits(units){
+  localStorage.setItem('lbb_model_units', JSON.stringify(units));
+}
+function buildModelUnitOptions(){
+  const units = getModelUnits();
+  return '<option value="">+ หน่วย</option>' +
+    units.map(u=>`<option value="${u}">${u}</option>`).join('') +
+    '<option value="__add__">✏️ จัดการหน่วย…</option>';
+}
+function applyModelUnit(id){
+  const modelEl=document.getElementById(`in-${id}-model`);
+  const unitEl=document.getElementById(`in-${id}-modelunit`);
+  if(!modelEl||!unitEl)return;
+  if(unitEl.value==='__add__'){
+    unitEl.value='';
+    openManageUnits();
+    return;
+  }
+  if(!unitEl.value)return;
+  const v=modelEl.value.trim();
+  if(!v){
+    // ยังไม่ได้พิมพ์ตัวเลข — focus ไปที่ช่องพิมพ์และ reset
+    unitEl.value='';
+    modelEl.focus();
+    modelEl.placeholder='พิมพ์ตัวเลขก่อน แล้วเลือกหน่วย';
+    setTimeout(()=>{ modelEl.placeholder='เช่น 2, HR130-4'; }, 2000);
+    return;
+  }
+  const cleaned=v.replace(/\s*(เมตร|ซม\.|นิ้ว|มม\.|ลิตร|กิโลเมตร|m|cm|mm|inch)\s*$/i,'').trim();
+  modelEl.value=cleaned?(cleaned+' '+unitEl.value):unitEl.value;
+  unitEl.value='';
+}
+function openManageUnits(){
+  const units=getModelUnits();
+  const cur=units.join(', ');
+  const input=prompt('หน่วยทั้งหมด (คั่นด้วย , ) — ลบออกหรือเพิ่มได้เลย', cur);
+  if(input===null)return;
+  const newUnits=input.split(/[,，、]/).map(s=>s.trim()).filter(Boolean);
+  if(!newUnits.length){alert('ต้องมีอย่างน้อย 1 หน่วย');return;}
+  saveModelUnits(newUnits);
+  toast('บันทึกหน่วยแล้ว ✓','ok');
+  renderItems(); // re-render เพื่ออัปเดต dropdown
+}
 
 // ── PHOTOS ────────────────────────────────────────────────────────────────────
 function addPhotos(inp){
@@ -1133,14 +1218,20 @@ function renderPhotos(){
 
 // ── SAVE ──────────────────────────────────────────────────────────────────────
 function saveDoc(){
+  // ป้องกันกดซ้ำ
+  const saveBtn=document.getElementById('btn-save');
+  if(saveBtn&&saveBtn.disabled) return;
+  if(saveBtn){ saveBtn.disabled=true; }
+  const _restore=()=>{ if(saveBtn) saveBtn.disabled=false; };
+
   const proj=document.getElementById('f-proj').value.trim();
   const date=document.getElementById('f-date').value;
   const docno=document.getElementById('f-docno').value.trim()||(()=>{const n=genDocNo();document.getElementById('f-docno').placeholder=n;return n;})();
-  if(!proj){toast('กรุณากรอกชื่อโครงการ','err');return}
-  if(!date){toast('กรุณาเลือกวันที่','err');return}
+  if(!proj){toast('กรุณากรอกชื่อโครงการ','err');_restore();return}
+  if(!date){toast('กรุณาเลือกวันที่','err');_restore();return}
   if(fType==='mv'){
-    if(!document.getElementById('f-mv-from')?.value.trim()){toast('กรุณากรอกไซต์ต้นทาง','err');return}
-    if(!document.getElementById('f-mv-to')?.value.trim()){toast('กรุณากรอกไซต์ปลายทาง','err');return}
+    if(!document.getElementById('f-mv-from')?.value.trim()){toast('กรุณากรอกไซต์ต้นทาง','err');_restore();return}
+    if(!document.getElementById('f-mv-to')?.value.trim()){toast('กรุณากรอกไซต์ปลายทาง','err');_restore();return}
   }
   saveItemVals();
   const itemList=items.map(i=>getItemVals(i.id)).filter(i=>i.รายการ);
@@ -1178,9 +1269,10 @@ function saveDoc(){
   _p.รายการสินค้า=JSON.stringify(doc.รายการสินค้า||[]);
   _p.ลายเซ็น=JSON.stringify(doc.ลายเซ็น||{});
   gasPost('addDoc',_p).then(res=>{
+    _restore();
     if(res&&res.queued) toast('บันทึกแล้ว ✓ (จะซิงค์เมื่อ online)','ok');
     else toast('บันทึก + ซิงค์แล้ว ✓','ok');
-  }).catch(()=>{ queuePost('addDoc',_p); toast('บันทึกแล้ว ✓ (จะซิงค์เมื่อ online)','ok'); });
+  }).catch(()=>{ _restore(); queuePost('addDoc',_p); toast('บันทึกแล้ว ✓ (จะซิงค์เมื่อ online)','ok'); });
   if(doc.รูปถ่าย && doc.รูปถ่าย.length) uploadPhotosToDrive(doc.เลขเอกสาร, doc.รูปถ่าย, doc.id);
   openPrintModal(doc);
 }
@@ -1291,13 +1383,13 @@ function buildPrintableHTML(doc){
       rows.push(`<tr style="height:18px">
         <td style="text-align:center;border:1px solid #999;font-size:10pt">${i<items.length?i+1:''}</td>
         <td style="border:1px solid #6a6;padding:1px 4px;font-size:10pt">${it.รายการ||''}</td>
-        <td style="text-align:center;border:1px solid #6a6;font-size:10pt">${it.ขนาด||''}</td>
-        <td style="text-align:center;border:1px solid #6a6;font-size:10pt">${it.รุ่น||''}</td>
+        <td style="text-align:center;border:1px solid #6a6;font-size:9pt;white-space:nowrap">${it.ขนาด||''}</td>
+        <td style="text-align:center;border:1px solid #6a6;font-size:9pt;white-space:nowrap">${it.รุ่น||''}</td>
         <td style="text-align:center;border:1px solid #6a6;font-size:10pt">${it.ยี่ห้อ||''}</td>
         <td style="text-align:center;border:1px solid #6a6;font-size:10pt">${it.หมายเลข||''}</td>
         <td style="text-align:center;border:1px solid #6a6;font-size:10pt">${it.จำนวน||''}</td>
         <td style="text-align:center;border:1px solid #6a6;font-size:10pt">${it.หน่วย||''}</td>
-        <td style="border:1px solid #6a6;padding:1px 4px;font-size:10pt">${it.หมายเหตุ||''}</td>
+        <td style="border:1px solid #6a6;padding:1px 4px;font-size:9pt">${it.หมายเหตุ||''}</td>
       </tr>`);
     }
 
@@ -1999,6 +2091,7 @@ function renderCatalog(q){
 function openAddCatalog(){
   document.getElementById('catalog-modal-title').textContent = 'เพิ่มอุปกรณ์';
   const _nr=document.getElementById('cm-noreturn');if(_nr)_nr.checked=false;
+  const _al=document.getElementById('cm-alias');if(_al)_al.value='';
   ['cm-code','cm-name','cm-unit','cm-edit-idx','cm-edit-id'].forEach(id=>{
     const el=document.getElementById(id); if(el) el.value='';
   });
@@ -2028,6 +2121,7 @@ function openEditCatalog(idx){
   document.getElementById('cm-edit-idx').value = String(idx);
   document.getElementById('cm-edit-id').value  = c.id||'';
   const nr=document.getElementById('cm-noreturn');if(nr)nr.checked=!!(c.noReturn||c.noreturn);
+  const al=document.getElementById('cm-alias');if(al)al.value=(c.alias||[]).join(', ');
   document.getElementById('catalog-modal').classList.add('open');
 }
 function closeCatalogModal(){const m=document.getElementById('catalog-modal');if(m)m.classList.remove('open');}
@@ -2040,17 +2134,19 @@ function saveCatalogItem(){
   if(!name){ toast('กรุณากรอกชื่ออุปกรณ์','err'); return; }
 
   const noReturn = document.getElementById('cm-noreturn')?.checked || false;
+  const aliasRaw = document.getElementById('cm-alias')?.value||'';
+  const alias = aliasRaw.split(/[,，、]/).map(s=>s.trim()).filter(Boolean);
   if(editIdx !== ''){
     // แก้ไข
-    customCatalog[parseInt(editIdx)] = {code, name, unit, noReturn, id: editId};
+    customCatalog[parseInt(editIdx)] = {code, name, unit, noReturn, alias, id: editId};
     toast('แก้ไขแล้ว ✓','ok');
-    gasPost('saveCatalogItem',{code,name,unit,noReturn,id:editId}).catch(()=>{});
+    gasPost('saveCatalogItem',{code,name,unit,noReturn,alias:JSON.stringify(alias),id:editId}).catch(()=>{});
   } else {
     // เพิ่มใหม่
     const newId = 'cat_'+Date.now();
-    customCatalog.push({code, name, unit, noReturn, id: newId});
+    customCatalog.push({code, name, unit, noReturn, alias, id: newId});
     toast('เพิ่มแล้ว ✓','ok');
-    gasPost('saveCatalogItem',{code,name,unit,noReturn,id:newId}).catch(()=>{});
+    gasPost('saveCatalogItem',{code,name,unit,noReturn,alias:JSON.stringify(alias),id:newId}).catch(()=>{});
   }
   localStorage.setItem('lbk_catalog', JSON.stringify(customCatalog));
   // callback สำหรับ quickAdd
@@ -2394,8 +2490,16 @@ function editCatSearch(eid,val){
   if(!box)return;
   if(val.length<1){box.style.display='none';return;}
   const q=val.toLowerCase();
-  const _cat=[...CATALOG,...(window._sheetCatalog||[]),...customCatalog];
-  const found=_cat.filter(c=>c.name.toLowerCase().includes(q)||c.code.toLowerCase().includes(q)).slice(0,8);
+  const _cat=allCatalogList();
+  const scored=_cat.map(c=>{
+    const names=[c.name.toLowerCase(),...(c.alias||[]).map(a=>a.toLowerCase())];
+    const best=names.reduce((best,n)=>{const s=fuzzyMatch(n,q);return s.score>best.score?s:best},{score:0,match:false});
+    const codeHit=c.code.toLowerCase().includes(q);
+    return {c, s:codeHit&&!best.match?{score:60,match:true}:best};
+  }).filter(x=>x.s.match)
+    .sort((a,b)=>b.s.score-a.s.score)
+    .slice(0,10);
+  const found=scored.map(x=>x.c);
   if(!found.length){box.style.display='none';return;}
   box.innerHTML=found.map(c=>`
     <div class="cat-opt" onmousedown="pickEditCat(${eid},'${esc(c.name)}','${esc(c.unit)}')">
@@ -2430,6 +2534,11 @@ function saveEditDoc(){
   const idVal = document.getElementById('edit-doc-id').value;
   const idx = docs.findIndex(d=>String(d.id)===String(idVal));
   if(idx<0){ toast('ไม่พบเอกสาร','err'); return; }
+
+  // ป้องกันกดซ้ำ
+  const saveBtn = document.querySelector('#edit-modal .btn-blue');
+  if(saveBtn) { saveBtn.disabled=true; saveBtn.textContent='กำลังบันทึก…'; }
+
   const newStatus = document.getElementById('edit-status')?.value || docs[idx].สถานะ;
   docs[idx].โครงการ     = document.getElementById('edit-proj').value.trim();
   docs[idx].วันที่       = document.getElementById('edit-date').value;
@@ -2440,7 +2549,6 @@ function saveEditDoc(){
   docs[idx].สถานะ       = newStatus;
   docs[idx].โยกจาก      = document.getElementById('edit-mv-from')?.value.trim()||'';
   docs[idx].โยกไป       = document.getElementById('edit-mv-to')?.value.trim()||'';
-  // อัปเดตประเภทตามสถานะ
   if(newStatus==='โยก') docs[idx].ประเภท='mv';
   else if(newStatus==='รับเข้าสโตร์') docs[idx].ประเภท='in';
   else if(newStatus==='ออก') docs[idx].ประเภท='out';
@@ -2448,22 +2556,24 @@ function saveEditDoc(){
   docs[idx].รายการสินค้า = editItems.map(({eid:_,...r})=>r);
   docs[idx].รูปถ่าย      = [...editPhotos];
   localStorage.setItem('lbk_docs', JSON.stringify(docs));
-  // sync ไป Sheet
-  const p = Object.assign({},docs[idx]);
-  p.รูปถ่าย=[]; p.รายการสินค้า=JSON.stringify(p.รายการสินค้า||[]); p.ลายเซ็น=JSON.stringify(p.ลายเซ็น||{});
-  // delete เดิมก่อน แล้ว add ใหม่ เพื่อให้ทุกเครื่อง sync
-  gasPost('deleteDoc',{id: p.id}).then(()=>{
-    return gasPost('addDoc', p);
-  }).then(r=>{
-    if(r&&r.ok) toast('แก้ไขและ sync Sheet แล้ว ✓','ok');
-    else toast('แก้ไขใน app แล้ว (Sheet อาจมีปัญหา)','err');
-  }).catch(()=>toast('แก้ไขใน app แล้ว (offline)'));
-  if(editPhotos.length) uploadPhotosToDrive(docs[idx].เลขเอกสาร, editPhotos, docs[idx].id);
+
+  // บันทึก local เสร็จแล้ว — ปิด modal ทันที ไม่รอ Sheet
   closeEditDoc();
   renderHistory();
   renderStock();
   renderStoreStock();
-  toast('กำลัง sync…');
+  restore();
+
+  // sync Sheet ใน background
+  const p = Object.assign({},docs[idx]);
+  p.รูปถ่าย=[]; p.รายการสินค้า=JSON.stringify(p.รายการสินค้า||[]); p.ลายเซ็น=JSON.stringify(p.ลายเซ็น||{});
+  gasPost('deleteDoc',{id: p.id}).then(()=>{
+    return gasPost('addDoc', p);
+  }).then(r=>{
+    if(r&&r.ok) toast('sync Sheet แล้ว ✓','ok');
+  }).catch(()=>{ toast('แก้ไขใน app แล้ว (จะซิงค์ภายหลัง)','ok'); });
+
+  if(editPhotos.length) uploadPhotosToDrive(docs[idx].เลขเอกสาร, editPhotos, docs[idx].id);
 }
 
 
@@ -2521,9 +2631,20 @@ function buildStockMap() {
       const size = it.ขนาด || '';
       const model = it.รุ่น || '';
       const t = doc.ประเภท, mf = doc.โยกจาก || '', mt = doc.โยกไป || '';
+      // normalize ขนาด: "1000 mm" = "1000mm", "1 m" = "1m", "1 เมตร" = "1m"
+      const normSize = s => {
+        if(!s) return '';
+        return s.toLowerCase().trim()
+          .replace(/\s*(มิลลิเมตร|มิล|millimeter)\s*/g,'mm')
+          .replace(/\s*(เมตร|meter|metre|m\.)\s*/g,'m')
+          .replace(/\s*(mm)\s*/g,'mm')
+          .replace(/\s+(mm|m|cm|นิ้ว|inch)/g,'$1')
+          .replace(/\s+/g,' ').trim();
+      };
       const mk = (p, n, s, m) => {
-        const k = n + '|' + s + '|' + m + '|' + p;
-        if (!map[k]) map[k] = { name: n, size: s, model: m, proj: p, unit: it.หน่วย || '', in: 0, out: 0, mvin: 0, mvout: 0 };
+        const ns = normSize(s);
+        const k = n + '|' + ns + '|' + m + '|' + p;
+        if (!map[k]) map[k] = { name: n, size: s||ns, model: m, proj: p, unit: it.หน่วย || '', in: 0, out: 0, mvin: 0, mvout: 0 };
         return k;
       };
       if (t === 'in') map[mk(proj, name, size, model)].in += qty;
@@ -3798,6 +3919,10 @@ function toggleEditMvFields(){
       <div class="f" style="padding:0 0 10px">
         <div class="fl">หน่วย</div>
         <input class="fi" id="cm-unit" placeholder="ตัว/อัน">
+      </div>
+      <div class="f" style="padding:0 0 10px">
+        <div class="fl" style="font-size:12px">ชื่อเรียกอื่น <span style="color:var(--t3);font-size:11px">(คั่นด้วยจุลภาค)</span></div>
+        <input class="fi" id="cm-alias" placeholder="เช่น ตูดคิ้ว, คิ้วสั้น">
       </div>
       <div style="padding:0 0 10px;display:flex;align-items:center;gap:8px">
         <input type="checkbox" id="cm-noreturn" style="width:16px;height:16px;cursor:pointer">
