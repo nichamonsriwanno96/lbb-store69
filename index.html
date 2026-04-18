@@ -2144,11 +2144,21 @@ function saveCatalogItem(){
   const noReturn = document.getElementById('cm-noreturn')?.checked || false;
   const aliasRaw = document.getElementById('cm-alias')?.value||'';
   const alias = aliasRaw.split(/[,，、]/).map(s=>s.trim()).filter(Boolean);
-  if(editIdx !== ''){
-    // แก้ไข
-    customCatalog[parseInt(editIdx)] = {code, name, unit, noReturn, alias, id: editId};
-    toast('แก้ไขแล้ว ✓','ok');
-    gasPost('saveCatalogItem',{code,name,unit,noReturn,alias:JSON.stringify(alias),id:editId}).catch(()=>{});
+
+  if(editId){
+    // หา index จาก id (ปลอดภัยกว่าใช้ editIdx ที่อาจเพี้ยน)
+    const realIdx = customCatalog.findIndex(c=>c.id===editId);
+    if(realIdx>=0){
+      // แก้ไขรายการเดิม
+      customCatalog[realIdx] = {code, name, unit, noReturn, alias, id: editId};
+      toast('แก้ไขแล้ว ✓','ok');
+      gasPost('saveCatalogItem',{code,name,unit,noReturn,alias:JSON.stringify(alias),id:editId}).catch(()=>{});
+    } else {
+      // ไม่พบใน custom — เพิ่มใหม่
+      customCatalog.push({code, name, unit, noReturn, alias, id: editId});
+      toast('บันทึกแล้ว ✓','ok');
+      gasPost('saveCatalogItem',{code,name,unit,noReturn,alias:JSON.stringify(alias),id:editId}).catch(()=>{});
+    }
   } else {
     // เพิ่มใหม่
     const newId = 'cat_'+Date.now();
@@ -2223,7 +2233,7 @@ function toast(msg,type=''){
   setTimeout(()=>el.classList.remove('show'),2500);
 }
 
-const GAS_URL='https://script.google.com/macros/s/AKfycbxiHZLR9GEZ9AdGPkXKg2kd9GpPiMEQ-o2EBYuPWptfqxAp2Kd_FI6U6Z6ZZWQQWoCUsA/exec';
+const GAS_URL='https://script.google.com/macros/s/AKfycbzDebjE_Qo6MTsdqQJFQd2kOYeAs-7rOw9-2biUbyFxmL54BJ0PobEfx6Omb2VG6FbwNQ/exec';
 
 // ── SYNC QUEUE — เก็บ request ที่ยังไม่ได้ส่ง แล้ว retry อัตโนมัติ ─────────────
 let syncQueue = JSON.parse(localStorage.getItem('lbb_sync_queue')||'[]');
@@ -2562,6 +2572,17 @@ function saveEditDoc(){
   else if(newStatus==='รับเข้าสโตร์') docs[idx].ประเภท='in';
   else if(newStatus==='ออก') docs[idx].ประเภท='out';
   else if(newStatus==='คืน') docs[idx].ประเภท='in';
+  // sync ค่าจาก DOM ก่อน save (ป้องกัน oninput ไม่ได้ fire)
+  editItems.forEach(it=>{
+    const g=(k)=>{ const el=document.getElementById(`ei-${it.eid}-${k}`); return el?el.value:''; };
+    if(document.getElementById(`ei-${it.eid}-name`)) it['รายการ']=g('name');
+    if(document.getElementById(`ei-${it.eid}-size`)) it['ขนาด']=g('size');
+    if(document.getElementById(`ei-${it.eid}-qty`))  it['จำนวน']=g('qty');
+    if(document.getElementById(`ei-${it.eid}-unit`)) it['หน่วย']=g('unit');
+    if(document.getElementById(`ei-${it.eid}-model`))it['รุ่น']=g('model');
+    if(document.getElementById(`ei-${it.eid}-serial`))it['หมายเลข']=g('serial');
+    if(document.getElementById(`ei-${it.eid}-note`)) it['หมายเหตุ']=g('note');
+  });
   docs[idx].รายการสินค้า = editItems.map(({eid:_,...r})=>r);
   docs[idx].รูปถ่าย      = [...editPhotos];
   // ย้าย doc ที่แก้ไขขึ้นบนสุด
