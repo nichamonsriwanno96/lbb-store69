@@ -2226,6 +2226,7 @@ function goPage(name){
   if(name==='store'){renderStoreStock();}
   if(name==='catalog')renderCatalog();
   if(name==='steel')initSteelPage();
+  if(name==='form' && items.length===0) addItem(); // เพิ่ม item แรกถ้าว่าง
 }
 function toast(msg,type=''){
   const el=document.getElementById('toast');
@@ -2233,7 +2234,7 @@ function toast(msg,type=''){
   setTimeout(()=>el.classList.remove('show'),2500);
 }
 
-const GAS_URL='https://script.google.com/macros/s/AKfycbzDebjE_Qo6MTsdqQJFQd2kOYeAs-7rOw9-2biUbyFxmL54BJ0PobEfx6Omb2VG6FbwNQ/exec';
+const GAS_URL='https://script.google.com/macros/s/AKfycbzyF-s9AYxkfnx7u5ZE1gVMZXV7iKn9WY6uq6TdDD87bcapbrBeFZyc5Az2m4HxqSN_OQ/exec';
 
 // ── SYNC QUEUE — เก็บ request ที่ยังไม่ได้ส่ง แล้ว retry อัตโนมัติ ─────────────
 let syncQueue = JSON.parse(localStorage.getItem('lbb_sync_queue')||'[]');
@@ -2600,8 +2601,8 @@ function saveEditDoc(){
   renderStoreStock();
   restore();
 
-  // sync Sheet ด้วย updateDoc — อัปเดตแถวเดิมใน Sheet ไม่ลบแล้วสร้างใหม่
-  const p = Object.assign({},docs[idx]);
+  // sync Sheet — ใช้ editedDoc แทน docs[idx] ที่ index เปลี่ยนแล้ว
+  const p = Object.assign({}, editedDoc);
   p.รูปถ่าย=[]; p.รายการสินค้า=JSON.stringify(p.รายการสินค้า||[]); p.ลายเซ็น=JSON.stringify(p.ลายเซ็น||{});
   const syncTimeout = setTimeout(()=>{
     toast('แก้ไขใน app แล้ว (GAS timeout)','ok');
@@ -2755,23 +2756,26 @@ function loadAuditItems() {
       const prev = saved[auditKey(r)] || {};
       const prevActual = prev.actual !== undefined ? prev.actual : '';
       const prevNote = prev.note || '';
-      const diff = prevActual !== '' ? (Math.abs(parseFloat(prevActual)) - Math.abs(r.net)) : '';
+      const isNoReturn = !!r.noReturn;
+      const netDisplay = isNoReturn ? '-' : r.net;
+      const diff = (!isNoReturn && prevActual !== '') ? (Math.abs(parseFloat(prevActual)) - Math.abs(r.net)) : '';
       const diffColor = diff === '' ? 'var(--t3)' : diff === 0 ? 'var(--in)' : diff < 0 ? 'var(--red)' : 'var(--out)';
       const diffText = diff === '' ? '—' : diff > 0 ? '+' + diff : String(diff);
       return `
       <div style="border-bottom:1px dashed var(--border);padding:8px 0">
         <div style="display:grid;grid-template-columns:1fr 70px 70px 70px;gap:6px;align-items:center">
           <div>
-            <div style="font-size:13px;color:var(--t1)">${r.name}${r.size?`<span style="font-size:11px;color:var(--blue);margin-left:4px">${r.size}</span>`:``}${r.model?`<span style="font-size:11px;color:var(--t2);margin-left:2px">${r.model}</span>`:``}</div>
+            <div style="font-size:13px;color:var(--t1)">${r.name}${r.size?`<span style="font-size:11px;color:var(--blue);margin-left:4px">${r.size}</span>`:``}${r.model?`<span style="font-size:11px;color:var(--t2);margin-left:2px">${r.model}</span>`:``}${isNoReturn?`<span style="font-size:10px;color:var(--t3);margin-left:4px">♻️สิ้นเปลือง</span>`:``}</div>
             <div style="font-size:11px;color:var(--t3)">${r.unit || ''}</div>
           </div>
-          <div style="text-align:center;font-size:14px;font-weight:700;font-family:var(--mono);color:var(--blue)">${r.net}</div>
-          <div>
-            <input class="fi" type="number" id="aud-${i}-actual" value="${prevActual}"
-              style="text-align:center;padding:6px 4px;font-size:14px;font-weight:700"
-              placeholder="0" min="0" step="0.1"
-              oninput="updateAuditDiff(${i}, ${r.net})">
-          </div>
+          <div style="text-align:center;font-size:14px;font-weight:700;font-family:var(--mono);color:${isNoReturn?'var(--t3)':'var(--blue)'}">${netDisplay}</div>
+          <div>${isNoReturn
+            ? `<div style="text-align:center;color:var(--t3);font-size:12px">—</div>`
+            : `<input class="fi" type="number" id="aud-${i}-actual" value="${prevActual}"
+                style="text-align:center;padding:6px 4px;font-size:14px;font-weight:700"
+                placeholder="0" min="0" step="0.1"
+                oninput="updateAuditDiff(${i}, ${r.net})">`
+          }</div>
           <div id="aud-${i}-diff" style="text-align:center;font-size:14px;font-weight:700;font-family:var(--mono);color:${diffColor}">${diffText}</div>
         </div>
         <input class="fi" id="aud-${i}-note" value="${prevNote.replace(/"/g,'&quot;')}"
@@ -2780,6 +2784,7 @@ function loadAuditItems() {
         <input type="hidden" id="aud-${i}-size" value="${(r.size||'').replace(/"/g,'&quot;')}">
         <input type="hidden" id="aud-${i}-model" value="${(r.model||'').replace(/"/g,'&quot;')}">
         <input type="hidden" id="aud-${i}-sys" value="${r.net}">
+        <input type="hidden" id="aud-${i}-noreturn" value="${isNoReturn?'1':'0'}">
       </div>`;
     }).join('');
 }
@@ -2807,7 +2812,9 @@ function saveAudit() {
     const sz = (document.getElementById('aud-' + i + '-size')||{value:''}).value;
     const mdl = (document.getElementById('aud-' + i + '-model')||{value:''}).value;
     const akey = name+'|'+sz+'|'+mdl;
-    const actual = document.getElementById('aud-' + i + '-actual').value.trim();
+    const noreturn = (document.getElementById('aud-' + i + '-noreturn')||{value:'0'}).value === '1';
+    if (noreturn) return; // ข้ามสิ้นเปลือง
+    const actual = (document.getElementById('aud-' + i + '-actual')||{value:''}).value.trim();
     const note = document.getElementById('aud-' + i + '-note').value.trim();
     const sys = parseFloat(document.getElementById('aud-' + i + '-sys').value) || 0;
     if (actual !== '') {
@@ -2836,26 +2843,30 @@ function printAuditPDF() {
   const fileName = 'ตรวจสต็อก_' + proj + '_' + fileDate;
 
   const tableRows = rows.map((r, i) => {
-    const saved_r = saved[r.name+'|'+(r.size||'')+'|'+(r.model||'')] || {};
+    const key = r.name+'|'+(r.size||'')+'|'+(r.model||'');
+    const saved_r = saved[key] || {};
     const actual = saved_r.actual !== undefined ? saved_r.actual : '';
     const note = saved_r.note || '';
     const auditDate = saved_r.date ? (() => { const p = saved_r.date.split('-'); return p[2]+'/'+p[1]+'/'+(parseInt(p[0])+543); })() : '';
-    const diff = actual !== '' ? (Math.abs(parseFloat(actual)) - Math.abs(r.net)) : null;
-    const status = actual === '' 
-      ? '<span style="color:#aaa;font-size:10pt">—</span>'
-      : diff === 0 
-        ? '<span style="color:#1a7a3c;font-weight:700;font-size:10pt">ครบ</span>'
-        : diff < 0 
-          ? `<span style="color:#c0392b;font-weight:700;font-size:10pt">ขาด ${Math.abs(diff)}</span>`
-          : `<span style="color:#d35400;font-weight:700;font-size:10pt">เกิน ${diff}</span>`;
-    const diffText = diff === null ? '—' : diff === 0 ? '0' : diff > 0 ? '+' + diff : String(diff);
+    const netDisplay = r.noReturn ? '-' : r.net;
+    const diff = (actual !== '' && !r.noReturn) ? (Math.abs(parseFloat(actual)) - Math.abs(r.net)) : null;
+    const status = r.noReturn
+      ? '<span style="color:#888;font-size:10pt">สิ้นเปลือง</span>'
+      : actual === '' 
+        ? '<span style="color:#aaa;font-size:10pt">—</span>'
+        : diff === 0 
+          ? '<span style="color:#1a7a3c;font-weight:700;font-size:10pt">ครบ</span>'
+          : diff < 0 
+            ? `<span style="color:#c0392b;font-weight:700;font-size:10pt">ขาด ${Math.abs(diff)}</span>`
+            : `<span style="color:#d35400;font-weight:700;font-size:10pt">เกิน ${diff}</span>`;
+    const diffText = r.noReturn ? '—' : diff === null ? '—' : diff === 0 ? '0' : diff > 0 ? '+' + diff : String(diff);
     const diffColor = diff === null ? '#aaa' : diff === 0 ? '#1a7a3c' : diff < 0 ? '#c0392b' : '#d35400';
     const rowBg = i % 2 === 0 ? '#fff' : '#fafafa';
     return `<tr style="background:${rowBg}">
       <td style="border:1px solid #ddd;text-align:center;padding:4px 3px;font-size:10pt">${i+1}</td>
       <td style="border:1px solid #ddd;padding:4px 8px;font-size:10pt">${r.name}${r.size?'<br><span style="font-size:9pt;color:#555">'+r.size+'</span>':''}${r.model?'<span style="font-size:9pt;color:#888"> / '+r.model+'</span>':''}</td>
       <td style="border:1px solid #ddd;text-align:center;padding:4px;font-size:10pt">${r.unit||'-'}</td>
-      <td style="border:1px solid #ddd;text-align:center;padding:4px;font-size:11pt;font-weight:700;color:#1B3A6B">${r.net}</td>
+      <td style="border:1px solid #ddd;text-align:center;padding:4px;font-size:11pt;font-weight:700;color:#1B3A6B">${netDisplay}</td>
       <td style="border:1px solid #ddd;text-align:center;padding:4px;font-size:11pt;font-weight:700;color:#333">${actual !== '' ? actual : '<span style="color:#bbb">—</span>'}</td>
       <td style="border:1px solid #ddd;text-align:center;padding:4px;font-size:11pt;font-weight:700;color:${diffColor}">${diffText}</td>
       <td style="border:1px solid #ddd;text-align:center;padding:4px;font-size:13pt">${status}</td>
@@ -2865,9 +2876,9 @@ function printAuditPDF() {
   }).join('');
 
   const total = rows.length;
-  const checked = rows.filter(r => saved[r.name]?.actual !== undefined).length;
-  const ok = rows.filter(r => { const s = saved[r.name]; return s?.actual !== undefined && (Math.abs(s.actual) - Math.abs(r.net)) === 0; }).length;
-  const short = rows.filter(r => { const s = saved[r.name]; return s?.actual !== undefined && (Math.abs(s.actual) - Math.abs(r.net)) < 0; }).length;
+  const checked = rows.filter(r => { const k=r.name+'|'+(r.size||'')+'|'+(r.model||''); return saved[k]?.actual !== undefined; }).length;
+  const ok = rows.filter(r => { const k=r.name+'|'+(r.size||'')+'|'+(r.model||''); const s=saved[k]; return s?.actual !== undefined && (Math.abs(s.actual) - Math.abs(r.net)) === 0; }).length;
+  const short = rows.filter(r => { const k=r.name+'|'+(r.size||'')+'|'+(r.model||''); const s=saved[k]; return s?.actual !== undefined && (Math.abs(s.actual) - Math.abs(r.net)) < 0; }).length;
 
   const h = `<!DOCTYPE html><html><head>
 <meta charset="UTF-8"><title>${fileName}</title>
