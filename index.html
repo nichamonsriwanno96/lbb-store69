@@ -2657,7 +2657,17 @@ function buildPhotoPage(doc) {
 }
 
 // ── AUDIT (ตรวจสต็อก) ────────────────────────────────────────────────────────
-let auditData = JSON.parse(localStorage.getItem('lbk_audits') || '{}');
+// โหลด auditData พร้อม normalize NFC ป้องกัน unicode ต่างกัน
+let auditData = (()=>{
+  const raw = JSON.parse(localStorage.getItem('lbk_audits')||'{}');
+  const fixed = {};
+  Object.keys(raw).forEach(proj=>{
+    const fp = proj.normalize('NFC');
+    fixed[fp] = {};
+    Object.keys(raw[proj]).forEach(k=>{ fixed[fp][k.normalize('NFC')] = raw[proj][k]; });
+  });
+  return fixed;
+})();
 // auditData[proj][itemName] = { actual, note, date }
 
 function buildStockMap() {
@@ -2735,7 +2745,7 @@ function loadAuditItems() {
       '<div style="text-align:center;padding:32px;color:var(--t3)">เลือกโครงการก่อน</div>';
     return;
   }
-  const rows = buildStockMap().filter(r => r.proj === proj && (r.out + r.mvout) > 0)
+  const rows = buildStockMap().filter(r => r.proj === proj && (r.out + r.mvout + r.mvin) > 0)
     .sort((a, b) => a.name.localeCompare(b.name, 'th'));
   const saved = auditData[proj] || {};
   const auditKey = r => r.name+'|'+(r.size||'')+'|'+(r.model||'');
@@ -2803,7 +2813,8 @@ function saveAudit() {
   const proj = document.getElementById('audit-proj-select').value;
   const date = document.getElementById('audit-date').value;
   if (!proj) { toast('เลือกโครงการก่อน', 'err'); return; }
-  if (!auditData[proj]) auditData[proj] = {};
+  if (!auditData[proj.normalize('NFC')]) auditData[proj.normalize('NFC')] = {};
+  const _proj = proj.normalize('NFC');
   // อ่านค่าทุกรายการ
   let count = 0;
   document.querySelectorAll('#audit-items-wrap input[id^="aud-"][id$="-name"]').forEach(el => {
@@ -2811,18 +2822,19 @@ function saveAudit() {
     const name = el.value;
     const sz = (document.getElementById('aud-' + i + '-size')||{value:''}).value;
     const mdl = (document.getElementById('aud-' + i + '-model')||{value:''}).value;
-    const akey = name+'|'+sz+'|'+mdl;
+    const akey = (name+'|'+sz+'|'+mdl).normalize('NFC');
     const noreturn = (document.getElementById('aud-' + i + '-noreturn')||{value:'0'}).value === '1';
-    if (noreturn) return; // ข้ามสิ้นเปลือง
+    if (noreturn) return;
     const actual = (document.getElementById('aud-' + i + '-actual')||{value:''}).value.trim();
     const note = document.getElementById('aud-' + i + '-note').value.trim();
     const sys = parseFloat(document.getElementById('aud-' + i + '-sys').value) || 0;
     if (actual !== '') {
-      auditData[proj][akey] = { actual: parseFloat(actual), note, date, sys, name, size:sz, model:mdl };
+      auditData[_proj][akey] = { actual: parseFloat(actual), note, date, sys, name, size:sz, model:mdl };
       count++;
     }
   });
   if (!count) { toast('กรอกยอดนับจริงอย่างน้อย 1 รายการ', 'err'); return; }
+  auditData[_proj] = auditData[_proj] || {};
   localStorage.setItem('lbk_audits', JSON.stringify(auditData));
   toast('บันทึกผลตรวจ ' + count + ' รายการ ✓', 'ok');
   loadAuditItems(); // refresh diff
@@ -2833,7 +2845,7 @@ function printAuditPDF() {
   const proj = document.getElementById('audit-proj-select').value;
   const date = document.getElementById('audit-date').value;
   if (!proj) { toast('เลือกโครงการก่อน', 'err'); return; }
-  const rows = buildStockMap().filter(r => r.proj === proj && (r.out + r.mvout) > 0)
+  const rows = buildStockMap().filter(r => r.proj === proj && (r.out + r.mvout + r.mvin) > 0)
     .sort((a, b) => a.name.localeCompare(b.name, 'th'));
   const saved = auditData[proj] || {};
   const today = new Date();
