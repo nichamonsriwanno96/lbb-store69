@@ -1433,7 +1433,7 @@ function buildPrintableHTML(doc){
       </tr>`);
     }
 
-    pages+=`<div style="font-family:'Sarabun',sans-serif;font-size:10.5pt;color:#000;background:#fff;padding:6mm 8mm;max-width:210mm;${pageBreak}">
+    pages+=`<div style="font-family:'Sarabun',sans-serif;font-size:10.5pt;color:#000;background:#fff;padding:6mm 8mm;width:210mm;min-height:287mm;box-sizing:border-box;${pageBreak}">
 
 <!-- HEADER -->
 <table style="width:100%;border-collapse:collapse;margin-bottom:3px">
@@ -1501,7 +1501,7 @@ function buildPrintableHTML(doc){
 
 <!-- ตารางรายการ -->
 <table style="width:100%;border-collapse:collapse;margin-bottom:3px">
-  <tr style="background:#d9d9d9;font-weight:700;font-size:9.5pt">
+  <tr style="font-weight:700;font-size:9.5pt">
     <th style="border:1px solid #000;padding:3px 2px;width:28px;text-align:center">ลำดับ</th>
     <th style="border:1px solid #000;padding:3px 4px;text-align:center">รายการ</th>
     <th style="border:1px solid #000;padding:3px 2px;width:55px;text-align:center">ขนาด</th>
@@ -1518,7 +1518,7 @@ function buildPrintableHTML(doc){
 <!-- ลายเซ็น 2 แถว ตาม FM-ST-05 -->
 <table style="width:100%;border-collapse:collapse;margin-bottom:2px">
   <tr>
-    <td colspan="3" style="border:1px solid #000;background:#fff3e0;padding:2px 8px;font-size:9pt;font-weight:700">ต้นทาง</td>
+    <td colspan="3" style="border:1px solid #000;padding:2px 8px;font-size:9pt;font-weight:700">ต้นทาง</td>
   </tr>
   <tr>
     ${sigBlock('สโตร์',sig_st_store)}
@@ -1526,7 +1526,7 @@ function buildPrintableHTML(doc){
     ${sigBlock('พนักงานขับรถ',sig_drv_from)}
   </tr>
   <tr>
-    <td colspan="3" style="border:1px solid #000;background:#e8f5e8;padding:2px 8px;font-size:9pt;font-weight:700">ปลายทาง</td>
+    <td colspan="3" style="border:1px solid #000;padding:2px 8px;font-size:9pt;font-weight:700">ปลายทาง</td>
   </tr>
   <tr>
     ${sigBlock('ผู้รับของ',sig_recv)}
