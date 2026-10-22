@@ -330,7 +330,6 @@ input,select,textarea,button{font-family:var(--font)}
   <div class="nav-brand"><em>LBB</em> สโตร์</div>
   <div class="tabs">
     <button class="tab on" onclick="goPage('form')">กรอก</button>
-    <button class="tab" onclick="goPage('steel')">🔩 เหล็ก</button>
     <button class="tab" onclick="goPage('history')">ประวัติ</button>
     <button class="tab" onclick="goPage('store')">🏪 สโตร์</button>
     <button class="tab" onclick="goPage('catalog')">ทะเบียน</button>
@@ -342,7 +341,7 @@ input,select,textarea,button{font-family:var(--font)}
 <!-- ═══════════════════════════════════════════════════════ PAGE: FORM -->
 <div id="pg-form" class="pg on no-print">
 
-  <!-- Type selector แถว 1: 3 ปุ่ม, แถว 2: 2 ปุ่มกว้างครึ่ง -->
+  <!-- Type selector แถว 1: 3 ปุ่ม, แถว 2: 3 ปุ่ม, แถว 3: 3 ปุ่ม -->
   <div style="padding:12px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:0">
     <div class="type-pill out-on" id="pill-out" onclick="setType('out')">
       <div class="code code-out">FM-ST-01-05</div>
@@ -351,21 +350,47 @@ input,select,textarea,button{font-family:var(--font)}
       <div class="sub">ส่งออกโครงการ</div>
     </div>
     <div class="type-pill" id="pill-in" onclick="setType('in')">
-      <div class="code code-in">FM-ST-01-08</div>
+      <div class="code code-out">FM-ST-01-05</div>
       <div class="ico">📥</div>
       <div class="lbl">นำของเข้า</div>
       <div class="sub">คืนกลับสโตร์</div>
     </div>
     <div class="type-pill" id="pill-buy" onclick="setType('buy')">
-      <div class="code" style="background:rgba(68,147,248,.12);color:var(--blue);font-size:9px;font-family:var(--mono);padding:2px 6px;border-radius:4px;margin-bottom:6px;display:inline-block">FM-ST-01-10</div>
+      <div class="code code-out">FM-ST-01-05</div>
       <div class="ico">🏪</div>
       <div class="lbl">รับเข้าสโตร์</div>
       <div class="sub">ซื้อใหม่/ยอดตั้งต้น</div>
     </div>
   </div>
-  <div style="padding:0 12px 12px;display:grid;grid-template-columns:1fr 1fr;gap:10px">
+  <div style="padding:0 12px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:0">
+    <div class="type-pill" id="pill-fix-in" onclick="setType('fix-in')">
+      <div class="code code-out">FM-ST-01-05</div>
+      <div class="ico">🔧</div>
+      <div class="lbl">ส่งซ่อม(ภายใน)</div>
+      <div class="sub">ซ่อมภายในองค์กร</div>
+    </div>
+    <div class="type-pill" id="pill-fix-out" onclick="setType('fix-out')">
+      <div class="code code-out">FM-ST-01-05</div>
+      <div class="ico">🔩</div>
+      <div class="lbl">ส่งซ่อม(ภายนอก)</div>
+      <div class="sub">ส่งซ่อมนอกบริษัท</div>
+    </div>
+    <div class="type-pill" id="pill-ret-store" onclick="setType('ret-store')">
+      <div class="code code-out">FM-ST-01-05</div>
+      <div class="ico">↩️</div>
+      <div class="lbl">ส่งคืนสโตร์</div>
+      <div class="sub">คืนเข้าคลัง</div>
+    </div>
+  </div>
+  <div style="padding:10px 12px 12px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+    <div class="type-pill" id="pill-ret-site" onclick="setType('ret-site')">
+      <div class="code code-out">FM-ST-01-05</div>
+      <div class="ico">🏗️</div>
+      <div class="lbl">ส่งคืนหน้างาน</div>
+      <div class="sub">คืนไปที่ไซต์</div>
+    </div>
     <div class="type-pill" id="pill-mv" onclick="setType('mv')">
-      <div class="code" style="background:rgba(124,58,237,.15);color:#a78bfa;font-size:9px;font-family:var(--mono);padding:2px 6px;border-radius:4px;margin-bottom:6px;display:inline-block">โยกย้าย</div>
+      <div class="code code-out">FM-ST-01-05</div>
       <div class="ico">🔄</div>
       <div class="lbl">โยกย้าย</div>
       <div class="sub">ระหว่างไซต์</div>
@@ -376,7 +401,6 @@ input,select,textarea,button{font-family:var(--font)}
       <div class="lbl">สูญเสีย</div>
       <div class="sub">ฝัง/หัก/สูญหาย</div>
     </div>
-
   </div>
 
   <!-- Loss fields -->
@@ -800,11 +824,13 @@ function showSyncingIndicator(on){
 function setType(t){
   fType=t;
   const isOut=t==='out',isMv=t==='mv',isLoss=t==='loss',isBuy=t==='buy',isIn=t==='in';
-  document.getElementById('pill-out').className='type-pill'+(isOut?' out-on':'');
-  document.getElementById('pill-in').className='type-pill'+(isIn?' in-on':'');
-  document.getElementById('pill-mv').className='type-pill'+(isMv?' mv-on':'');
-  document.getElementById('pill-loss').className='type-pill'+(isLoss?' loss-on':'');
-  document.getElementById('pill-buy').className='type-pill'+(isBuy?' buy-on':'');
+  const isFixIn=t==='fix-in',isFixOut=t==='fix-out',isRetStore=t==='ret-store',isRetSite=t==='ret-site';
+  ['out','in','mv','loss','buy','fix-in','fix-out','ret-store','ret-site'].forEach(tp=>{
+    const el=document.getElementById('pill-'+tp);
+    if(!el)return;
+    const onCls=tp==='out'?'out-on':tp==='loss'?'loss-on':tp==='mv'?'mv-on':tp==='buy'?'buy-on':'in-on';
+    el.className='type-pill'+(t===tp?' '+onCls:'');
+  });
   document.getElementById('btn-save').className='btn '+(isOut?'btn-out':isMv||isBuy?'btn-blue':isLoss?'btn-red':'btn-in');
 
   // helper
@@ -836,7 +862,7 @@ function setType(t){
     setHTML('lbl-proj','โครงการ <span class="req">*</span>');
     set('lbl-sec-header','ข้อมูลหัวเอกสาร');
     set('lbl-req','ผู้ขออนุญาต');
-    set('lbl-carrier',isOut?'ผู้นำของออก':isMv?'ผู้ขนย้าย':isLoss?'ผู้รายงาน':'ผู้นำของเข้า');
+    set('lbl-carrier',isOut?'ผู้นำของออก':isMv?'ผู้ขนย้าย':isLoss?'ผู้รายงาน':isFixIn||isFixOut?'ผู้ส่งซ่อม':isRetStore||isRetSite?'ผู้ส่งคืน':'ผู้นำของเข้า');
     set('lbl-car','ทะเบียนรถ');
     set('lbl-s1',isOut||isLoss?'สโตร์':isMv?'สโตร์':'ผู้บันทึกรายการ');
     set('lbl-s2','พนักงานขับรถ');
@@ -860,7 +886,7 @@ function setType(t){
 }
 
 function genDocNo(){
-  const p=fType==='out'?'OUT':fType==='mv'?'MOV':fType==='loss'?'LOSS':fType==='buy'?'BUY':'IN';
+  const p=fType==='out'?'OUT':fType==='mv'?'MOV':fType==='loss'?'LOSS':fType==='buy'?'BUY':fType==='fix-in'?'FIX-IN':fType==='fix-out'?'FIX-OUT':fType==='ret-store'?'RET-ST':fType==='ret-site'?'RET-SI':'IN';
   const d=new Date();
   const yy=(d.getFullYear()+543).toString().slice(2);
   const mm=String(d.getMonth()+1).padStart(2,'0');
@@ -1253,7 +1279,7 @@ function saveDoc(){
     รายการสินค้า:itemList,
     รูปถ่าย:[...photos],
     หมายเหตุ:document.getElementById('f-note').value.trim(),
-    สถานะ: fType==='out'?'ออก':fType==='mv'?'โยก':fType==='loss'?'สูญเสีย':fType==='buy'?'รับเข้าสโตร์':'คืน',
+    สถานะ: fType==='out'?'ออก':fType==='mv'?'โยก':fType==='loss'?'สูญเสีย':fType==='buy'?'รับเข้าสโตร์':fType==='fix-in'?'ส่งซ่อมภายใน':fType==='fix-out'?'ส่งซ่อมภายนอก':fType==='ret-store'?'ส่งคืนสโตร์':fType==='ret-site'?'ส่งคืนหน้างาน':'คืน',
     แหล่งข้อมูล: fType==='buy'?'สโตร์':'',  // flag ว่าเป็นรับเข้าสโตร์
     โยกจาก: document.getElementById('f-mv-from')?.value.trim()||'',
     โยกไป: document.getElementById('f-mv-to')?.value.trim()||'',
@@ -1350,7 +1376,11 @@ function buildPrintableHTML(doc){
   const isLoss=t==='loss'||s==='สูญเสีย';
   const isBuy=s==='รับเข้าสโตร์';
   const isMv=t==='mv'||s==='โยก';
-  const isIn=!isOut&&!isLoss&&!isBuy&&!isMv;
+  const isFixIn=t==='fix-in'||s==='ส่งซ่อมภายใน';
+  const isFixOut=t==='fix-out'||s==='ส่งซ่อมภายนอก';
+  const isRetStore=t==='ret-store'||s==='ส่งคืนสโตร์';
+  const isRetSite=t==='ret-site'||s==='ส่งคืนหน้างาน';
+  const isIn=!isOut&&!isLoss&&!isBuy&&!isMv&&!isFixIn&&!isFixOut&&!isRetStore&&!isRetSite;
   const sigs=typeof doc.ลายเซ็น==='string'?JSON.parse(doc.ลายเซ็น||'{}'):(doc.ลายเซ็น||{});
   const items=doc.รายการสินค้า||[];
   const fmtD=s=>{if(!s)return'';const p=s.split('-');return p.length===3?`${p[2]}/${p[1]}/${parseInt(p[0])+543}`:s;};
@@ -1408,45 +1438,15 @@ function buildPrintableHTML(doc){
 <!-- HEADER -->
 <table style="width:100%;border-collapse:collapse;margin-bottom:3px">
   <tr>
-    <td style="width:46%;border:2px solid #000;padding:7px 12px;vertical-align:middle">
-      <div style="font-size:16pt;font-weight:700;line-height:1.3">ใบนำวัสดุ-อุปกรณ์ เข้า-ออก</div>
+    <td style="width:50%;border:2px solid #000;padding:7px 14px;vertical-align:middle">
+      <div style="font-size:17pt;font-weight:700;line-height:1.3">ใบนำวัสดุ-อุปกรณ์ เข้า-ออก</div>
+      <div style="font-size:8.5pt;color:#555;margin-top:2px">${isLoss?'FM-ST-01-09':'FM-ST-01-05'} Rev.01 &nbsp;|&nbsp; 30-09-2569</div>
     </td>
-    <td style="border:2px solid #000;padding:4px 10px;text-align:right;line-height:1.6;vertical-align:middle;font-size:9pt">
+    <td style="border:2px solid #000;padding:5px 12px;text-align:right;line-height:1.7;vertical-align:middle;font-size:9pt">
       <strong style="font-size:9.5pt">บริษัท ลาดกระบัง เข็มเจาะ จำกัด</strong><br>
       19/2 ถนนฉลองกรุง แขวงลำปลาทิว<br>
       เขตลาดกระบัง กรุงเทพมหานคร 10520<br>
       Tel.: (02) 737-4458&nbsp;&nbsp;Fax.: (02) 737-4459
-    </td>
-    <td style="border:2px solid #000;padding:4px 6px;text-align:center;vertical-align:middle;width:65px">
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 240" width="52" height="62" style="display:block;margin:0 auto">
-        <!-- วัว LBB สีเขียว -->
-        <g fill="#00897B">
-          <!-- เขาซ้าย -->
-          <path d="M55 15 C40 5 25 20 30 50 C35 65 50 60 55 50 Z"/>
-          <!-- เขาขวา -->
-          <path d="M145 15 C160 5 175 20 170 50 C165 65 150 60 145 50 Z"/>
-          <!-- หัว -->
-          <ellipse cx="100" cy="90" rx="52" ry="48"/>
-          <!-- ช่องว่างหน้า (ตา/จมูก) -->
-          <ellipse cx="100" cy="85" rx="28" ry="30" fill="#fff"/>
-          <!-- จุดตาซ้าย -->
-          <circle cx="82" cy="72" r="7" fill="#00897B"/>
-          <!-- จุดตาขวา -->
-          <circle cx="118" cy="72" r="7" fill="#00897B"/>
-          <!-- จมูก -->
-          <ellipse cx="100" cy="102" rx="16" ry="10" fill="#00897B"/>
-          <ellipse cx="94" cy="101" rx="4" ry="5" fill="#fff"/>
-          <ellipse cx="106" cy="101" rx="4" ry="5" fill="#fff"/>
-          <!-- คอ -->
-          <rect x="72" y="130" width="56" height="30" rx="8"/>
-          <!-- หู/แก้มซ้าย -->
-          <ellipse cx="52" cy="90" rx="14" ry="20"/>
-          <!-- หู/แก้มขวา -->
-          <ellipse cx="148" cy="90" rx="14" ry="20"/>
-        </g>
-        <!-- ข้อความ L.B.B. -->
-        <text x="100" y="198" text-anchor="middle" font-family="Arial,sans-serif" font-size="38" font-weight="900" fill="#00897B" letter-spacing="2">L.B.B.</text>
-      </svg>
     </td>
   </tr>
 </table>
@@ -1483,15 +1483,15 @@ function buildPrintableHTML(doc){
     <td style="border:1px solid #000;padding:4px 10px;font-size:10pt">
       <table style="width:100%;table-layout:fixed">
         <tr>
-          <td style="width:14%;padding:1px 0">${chk(isIn&&!isBuy&&mvType==='')} เข้า</td>
-          <td style="width:22%;padding:1px 0">${chk(mvType==='ส่งซ่อมภายใน')} ส่งซ่อม(ภายใน)</td>
-          <td style="width:22%;padding:1px 0">${chk(mvType==='ส่งซ่อมภายนอก')} ส่งซ่อม(ภายนอก)</td>
+          <td style="width:14%;padding:1px 0">${chk(isIn||isBuy)} เข้า</td>
+          <td style="width:22%;padding:1px 0">${chk(isFixIn||mvType==='ส่งซ่อมภายใน')} ส่งซ่อม(ภายใน)</td>
+          <td style="width:22%;padding:1px 0">${chk(isFixOut||mvType==='ส่งซ่อมภายนอก')} ส่งซ่อม(ภายนอก)</td>
           <td style="padding:1px 0">${chk(isMv)} โยกไปหน่วยงาน <span style="display:inline-block;border-bottom:1px dotted #555;min-width:80px;font-size:9pt;vertical-align:bottom">${isMv?(doc.โยกไป||''):''}</span></td>
         </tr>
         <tr>
           <td style="padding:1px 0">${chk(isOut)} ออก</td>
-          <td style="padding:1px 0">${chk(mvType==='ส่งคืนสโตร์'||isBuy)} ส่งคืนสโตร์</td>
-          <td style="padding:1px 0">${chk(mvType==='ส่งคืนหน้างาน')} ส่งคืนหน้างาน</td>
+          <td style="padding:1px 0">${chk(isRetStore||mvType==='ส่งคืนสโตร์')} ส่งคืนสโตร์</td>
+          <td style="padding:1px 0">${chk(isRetSite||mvType==='ส่งคืนหน้างาน')} ส่งคืนหน้างาน</td>
           <td style="padding:1px 0">${chk(isLoss||mvType==='อื่นๆ')} อื่นๆ <span style="display:inline-block;border-bottom:1px dotted #555;min-width:100px;font-size:9pt;vertical-align:bottom">${isLoss?(doc.ประเภทสูญเสีย||''):(mvType==='อื่นๆ'?doc.หมายเหตุประเภท||'':'')}</span></td>
         </tr>
       </table>
@@ -1504,10 +1504,10 @@ function buildPrintableHTML(doc){
   <tr style="background:#d9d9d9;font-weight:700;font-size:9.5pt">
     <th style="border:1px solid #000;padding:3px 2px;width:28px;text-align:center">ลำดับ</th>
     <th style="border:1px solid #000;padding:3px 4px;text-align:center">รายการ</th>
-    <th style="border:1px solid #000;padding:3px 2px;width:58px;text-align:center">ขนาด</th>
-    <th style="border:1px solid #000;padding:3px 2px;width:58px;text-align:center">รุ่น</th>
-    <th style="border:1px solid #000;padding:3px 2px;width:50px;text-align:center">ยี่ห้อ</th>
-    <th style="border:1px solid #000;padding:3px 2px;width:60px;text-align:center">หมายเลข<br>อุปกรณ์</th>
+    <th style="border:1px solid #000;padding:3px 2px;width:55px;text-align:center">ขนาด</th>
+    <th style="border:1px solid #000;padding:3px 2px;width:55px;text-align:center">รุ่น</th>
+    <th style="border:1px solid #000;padding:3px 2px;width:48px;text-align:center">ยี่ห้อ</th>
+    <th style="border:1px solid #000;padding:3px 2px;width:55px;text-align:center">หมายเลข<br>อุปกรณ์</th>
     <th style="border:1px solid #000;padding:3px 2px;width:44px;text-align:center">จำนวน</th>
     <th style="border:1px solid #000;padding:3px 2px;width:40px;text-align:center">หน่วย</th>
     <th style="border:1px solid #000;padding:3px 2px;width:68px;text-align:center">หมายเหตุ</th>
