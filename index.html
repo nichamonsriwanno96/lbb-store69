@@ -1417,8 +1417,36 @@ function buildPrintableHTML(doc){
       เขตลาดกระบัง กรุงเทพมหานคร 10520<br>
       Tel.: (02) 737-4458&nbsp;&nbsp;Fax.: (02) 737-4459
     </td>
-    <td style="border:2px solid #000;padding:4px 6px;text-align:center;vertical-align:middle;width:50px">
-      <div style="font-size:14pt;font-weight:900;font-style:italic;line-height:1.2;color:#1B3A6B">L.B.B.</div>
+    <td style="border:2px solid #000;padding:4px 6px;text-align:center;vertical-align:middle;width:65px">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 240" width="52" height="62" style="display:block;margin:0 auto">
+        <!-- วัว LBB สีเขียว -->
+        <g fill="#00897B">
+          <!-- เขาซ้าย -->
+          <path d="M55 15 C40 5 25 20 30 50 C35 65 50 60 55 50 Z"/>
+          <!-- เขาขวา -->
+          <path d="M145 15 C160 5 175 20 170 50 C165 65 150 60 145 50 Z"/>
+          <!-- หัว -->
+          <ellipse cx="100" cy="90" rx="52" ry="48"/>
+          <!-- ช่องว่างหน้า (ตา/จมูก) -->
+          <ellipse cx="100" cy="85" rx="28" ry="30" fill="#fff"/>
+          <!-- จุดตาซ้าย -->
+          <circle cx="82" cy="72" r="7" fill="#00897B"/>
+          <!-- จุดตาขวา -->
+          <circle cx="118" cy="72" r="7" fill="#00897B"/>
+          <!-- จมูก -->
+          <ellipse cx="100" cy="102" rx="16" ry="10" fill="#00897B"/>
+          <ellipse cx="94" cy="101" rx="4" ry="5" fill="#fff"/>
+          <ellipse cx="106" cy="101" rx="4" ry="5" fill="#fff"/>
+          <!-- คอ -->
+          <rect x="72" y="130" width="56" height="30" rx="8"/>
+          <!-- หู/แก้มซ้าย -->
+          <ellipse cx="52" cy="90" rx="14" ry="20"/>
+          <!-- หู/แก้มขวา -->
+          <ellipse cx="148" cy="90" rx="14" ry="20"/>
+        </g>
+        <!-- ข้อความ L.B.B. -->
+        <text x="100" y="198" text-anchor="middle" font-family="Arial,sans-serif" font-size="38" font-weight="900" fill="#00897B" letter-spacing="2">L.B.B.</text>
+      </svg>
     </td>
   </tr>
 </table>
@@ -1453,18 +1481,18 @@ function buildPrintableHTML(doc){
 <table style="width:100%;border-collapse:collapse;margin-bottom:3px">
   <tr>
     <td style="border:1px solid #000;padding:4px 10px;font-size:10pt">
-      <table style="width:100%">
+      <table style="width:100%;table-layout:fixed">
         <tr>
-          <td style="width:15%">${chk(isIn&&!isBuy&&mvType==='')} เข้า</td>
-          <td style="width:21%">${chk(mvType==='ส่งซ่อมภายใน')} ส่งซ่อม(ภายใน)</td>
-          <td style="width:23%">${chk(mvType==='ส่งซ่อมภายนอก')} ส่งซ่อม(ภายนอก)</td>
-          <td>${chk(isMv)} โยกไปหน่วยงาน <span style="display:inline-block;border-bottom:1px dotted #000;min-width:70px;font-size:9pt">${isMv?(doc.โยกไป||''):''}</span></td>
+          <td style="width:14%;padding:1px 0">${chk(isIn&&!isBuy&&mvType==='')} เข้า</td>
+          <td style="width:22%;padding:1px 0">${chk(mvType==='ส่งซ่อมภายใน')} ส่งซ่อม(ภายใน)</td>
+          <td style="width:22%;padding:1px 0">${chk(mvType==='ส่งซ่อมภายนอก')} ส่งซ่อม(ภายนอก)</td>
+          <td style="padding:1px 0">${chk(isMv)} โยกไปหน่วยงาน <span style="display:inline-block;border-bottom:1px dotted #555;min-width:80px;font-size:9pt;vertical-align:bottom">${isMv?(doc.โยกไป||''):''}</span></td>
         </tr>
         <tr>
-          <td>${chk(isOut)} ออก</td>
-          <td>${chk(mvType==='ส่งคืนสโตร์'||isBuy)} ส่งคืนสโตร์</td>
-          <td>${chk(mvType==='ส่งคืนหน้างาน')} ส่งคืนหน้างาน</td>
-          <td>${chk(isLoss||mvType==='อื่นๆ')} อื่นๆ <span style="display:inline-block;border-bottom:1px dotted #000;min-width:80px;font-size:9pt">${isLoss?(doc.ประเภทสูญเสีย||''):(mvType==='อื่นๆ'?doc.หมายเหตุประเภท||'':'')}</span></td>
+          <td style="padding:1px 0">${chk(isOut)} ออก</td>
+          <td style="padding:1px 0">${chk(mvType==='ส่งคืนสโตร์'||isBuy)} ส่งคืนสโตร์</td>
+          <td style="padding:1px 0">${chk(mvType==='ส่งคืนหน้างาน')} ส่งคืนหน้างาน</td>
+          <td style="padding:1px 0">${chk(isLoss||mvType==='อื่นๆ')} อื่นๆ <span style="display:inline-block;border-bottom:1px dotted #555;min-width:100px;font-size:9pt;vertical-align:bottom">${isLoss?(doc.ประเภทสูญเสีย||''):(mvType==='อื่นๆ'?doc.หมายเหตุประเภท||'':'')}</span></td>
         </tr>
       </table>
     </td>
