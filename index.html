@@ -1420,7 +1420,8 @@ function buildPrintableHTML(doc){
     for(let r=0;r<ROWS_PER_PAGE;r++){
       const i=startIdx+r;
       const it=items[i]||{};
-      rows.push(`<tr style="height:19px">
+      const isEmpty=i>=items.length;
+      rows.push(`<tr style="${isEmpty?'height:1%':'height:19px'}">
         <td style="text-align:center;border:1px solid #000;font-size:9.5pt;padding:0 2px">${i<items.length?i+1:''}</td>
         <td style="border:1px solid #000;padding:0 4px;font-size:9.5pt">${it.รายการ||''}</td>
         <td style="text-align:center;border:1px solid #000;font-size:9pt;white-space:nowrap;padding:0 2px">${it.ขนาด||''}</td>
@@ -1433,7 +1434,7 @@ function buildPrintableHTML(doc){
       </tr>`);
     }
 
-    pages+=`<div style="font-family:'Sarabun',sans-serif;font-size:10.5pt;color:#000;background:#fff;padding:6mm 8mm;width:210mm;min-height:287mm;box-sizing:border-box;${pageBreak}">
+    pages+=`<div style="font-family:'Sarabun',sans-serif;font-size:10.5pt;color:#000;background:#fff;padding:6mm 8mm;width:210mm;height:287mm;box-sizing:border-box;display:flex;flex-direction:column;${pageBreak}">
 
 <!-- HEADER -->
 <table style="width:100%;border-collapse:collapse;margin-bottom:3px">
@@ -1500,7 +1501,8 @@ function buildPrintableHTML(doc){
 </table>
 
 <!-- ตารางรายการ -->
-<table style="width:100%;border-collapse:collapse;margin-bottom:3px">
+<div style="flex:1;display:flex;flex-direction:column;margin-bottom:3px">
+<table style="width:100%;border-collapse:collapse;height:100%">
   <tr style="font-weight:700;font-size:9.5pt">
     <th style="border:1px solid #000;padding:3px 2px;width:28px;text-align:center">ลำดับ</th>
     <th style="border:1px solid #000;padding:3px 4px;text-align:center">รายการ</th>
@@ -1514,6 +1516,7 @@ function buildPrintableHTML(doc){
   </tr>
   ${rows.join('')}
 </table>
+</div>
 
 <!-- ลายเซ็น 2 แถว ตาม FM-ST-05 -->
 <table style="width:100%;border-collapse:collapse;margin-bottom:2px">
