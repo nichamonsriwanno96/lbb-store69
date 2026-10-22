@@ -1350,7 +1350,12 @@ function printForm(){
 @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap');
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'Sarabun',sans-serif;background:#fff}
-@media print{@page{size:A4;margin:0}body{margin:0}button{display:none!important}}
+@media print{
+  @page{size:A4;margin:0}
+  body{margin:0}
+  button{display:none!important}
+  .form-row{height:8.7mm!important}
+}
 </style></head><body>
 <div style="text-align:center;padding:8px;background:#f5f5f5" class="no-print">
   <button onclick="document.title='${fileName.replace(/'/g,"\\'")}';window.print()" style="background:#1B3A6B;color:#fff;border:none;padding:10px 28px;border-radius:8px;font-size:15px;cursor:pointer;font-family:Sarabun,sans-serif">
@@ -1420,7 +1425,7 @@ function buildPrintableHTML(doc){
     for(let r=0;r<ROWS_PER_PAGE;r++){
       const i=startIdx+r;
       const it=items[i]||{};
-      rows.push(`<tr style="height:8.5mm">
+      rows.push(`<tr class="form-row" style="height:39px">
         <td style="text-align:center;border:1px solid #000;font-size:9.5pt;padding:0 2px">${i<items.length?i+1:''}</td>
         <td style="border:1px solid #000;padding:0 4px;font-size:9.5pt">${it.รายการ||''}</td>
         <td style="text-align:center;border:1px solid #000;font-size:9pt;white-space:nowrap;padding:0 2px">${it.ขนาด||''}</td>
@@ -1501,16 +1506,16 @@ function buildPrintableHTML(doc){
 
 <!-- ตารางรายการ -->
 <table style="width:100%;border-collapse:collapse;margin-bottom:3px">
-  <tr style="font-weight:700;font-size:9.5pt">
-    <th style="border:1px solid #000;padding:3px 2px;width:28px;text-align:center">ลำดับ</th>
-    <th style="border:1px solid #000;padding:3px 4px;text-align:center">รายการ</th>
-    <th style="border:1px solid #000;padding:3px 2px;width:55px;text-align:center">ขนาด</th>
-    <th style="border:1px solid #000;padding:3px 2px;width:55px;text-align:center">รุ่น</th>
-    <th style="border:1px solid #000;padding:3px 2px;width:48px;text-align:center">ยี่ห้อ</th>
-    <th style="border:1px solid #000;padding:3px 2px;width:55px;text-align:center">หมายเลข<br>อุปกรณ์</th>
-    <th style="border:1px solid #000;padding:3px 2px;width:44px;text-align:center">จำนวน</th>
-    <th style="border:1px solid #000;padding:3px 2px;width:40px;text-align:center">หน่วย</th>
-    <th style="border:1px solid #000;padding:3px 2px;width:68px;text-align:center">หมายเหตุ</th>
+  <tr class="form-row" style="font-weight:700;font-size:9.5pt;height:39px">
+    <th style="border:1px solid #000;padding:2px;width:28px;text-align:center">ลำดับ</th>
+    <th style="border:1px solid #000;padding:2px 4px;text-align:center">รายการ</th>
+    <th style="border:1px solid #000;padding:2px;width:55px;text-align:center">ขนาด</th>
+    <th style="border:1px solid #000;padding:2px;width:55px;text-align:center">รุ่น</th>
+    <th style="border:1px solid #000;padding:2px;width:48px;text-align:center">ยี่ห้อ</th>
+    <th style="border:1px solid #000;padding:2px;width:55px;text-align:center">หมายเลข<br>อุปกรณ์</th>
+    <th style="border:1px solid #000;padding:2px;width:44px;text-align:center">จำนวน</th>
+    <th style="border:1px solid #000;padding:2px;width:40px;text-align:center">หน่วย</th>
+    <th style="border:1px solid #000;padding:2px;width:68px;text-align:center">หมายเหตุ</th>
   </tr>
   ${rows.join('')}
 </table>
